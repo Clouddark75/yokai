@@ -30,7 +30,7 @@ fun OkHttpClient.Builder.rateLimit(
 private class RateLimitInterceptor(
     private val permits: Int,
     period: Long =0,
-    unit: TimeUnit = TimeUnit.SECONDS,
+    unit: TimeUnit,
 ) : Interceptor {
 
     private val requestQueue = ArrayList<Long>(permits)
