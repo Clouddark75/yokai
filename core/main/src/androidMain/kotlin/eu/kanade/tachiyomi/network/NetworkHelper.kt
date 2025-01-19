@@ -22,9 +22,9 @@ class NetworkHelper(
     val client: OkHttpClient = run {
         val builder = OkHttpClient.Builder()
             .cookieJar(cookieJar)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(2, TimeUnit.MINUTES)
+            .connectTimeout(6, TimeUnit.SECONDS)
+            .readTimeout(6, TimeUnit.SECONDS)
+            .callTimeout(40, TimeUnit.SECONDS)
             .cache(
                 Cache(
                     directory = File(context.cacheDir, "network_cache"),
