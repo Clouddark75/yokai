@@ -6,10 +6,12 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewTreeObserver.OnGlobalLayoutListener
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.content.withStyledAttributes
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsCompat.Type.systemBars
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePaddingRelative
+import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import eu.davidea.flexibleadapter.FlexibleAdapter
@@ -21,26 +23,37 @@ import eu.kanade.tachiyomi.util.view.checkHeightThen
 import eu.kanade.tachiyomi.util.view.collapse
 import eu.kanade.tachiyomi.util.view.doOnApplyWindowInsetsCompat
 import eu.kanade.tachiyomi.widget.E2EBottomSheetDialog
+import yokai.domain.source.browse.filter.models.SavedSearch
+import yokai.presentation.component.recyclerview.VertPaddingDecoration
 import android.R as AR
 
-class SourceFilterSheet(val activity: Activity) :
-    E2EBottomSheetDialog<SourceFilterSheetBinding>(activity) {
-
-    private var filterChanged = true
+class SourceFilterSheet(
+    val activity: Activity,
+    searches: () -> List<SavedSearch> = { emptyList() },
+    val onSearchClicked: () -> Unit,
+    val onResetClicked: () -> Unit,
+    val onSaveClicked: () -> Unit,
+    val onSavedSearchClicked: (Long) -> Unit,
+    val onDeleteSavedSearchClicked: (Long) -> Unit,
+) : E2EBottomSheetDialog<SourceFilterSheetBinding>(activity) {
 
     val adapter: FlexibleAdapter<IFlexible<*>> = FlexibleAdapter<IFlexible<*>>(null)
         .setDisplayHeadersAtStartUp(true)
 
-    var onSearchClicked = {}
-
-    var onResetClicked = {}
-
     override var recyclerView: RecyclerView? = binding.filtersRecycler
 
     override fun createBinding(inflater: LayoutInflater) = SourceFilterSheetBinding.inflate(inflater)
+
+    private val savedSearchesAdapter = SavedSearchesAdapter(
+        searches = searches,
+        onSavedSearchClicked = onSavedSearchClicked,
+        onDeleteSavedSearchClicked = onDeleteSavedSearchClicked,
+    )
+
     init {
         binding.searchBtn.setOnClickListener { dismiss() }
         binding.resetBtn.setOnClickListener { onResetClicked() }
+        binding.saveBtn.setOnClickListener { onSaveClicked() }
 
         sheetBehavior.peekHeight = 450.dpToPx
         sheetBehavior.collapse()
@@ -52,9 +65,7 @@ class SourceFilterSheet(val activity: Activity) :
         binding.cardView.doOnApplyWindowInsetsCompat { _, insets, _ ->
             binding.cardView.updateLayoutParams<ConstraintLayout.LayoutParams> {
                 val fullHeight = activity.window.decorView.height
-                matchConstraintMaxHeight =
-                    fullHeight - insets.getInsets(systemBars()).top -
-                    binding.titleLayout.height - 75.dpToPx
+                matchConstraintMaxHeight = fullHeight - insets.getInsets(systemBars()).top - binding.titleLayout.height - 75.dpToPx
             }
         }
 
@@ -83,7 +94,7 @@ class SourceFilterSheet(val activity: Activity) :
             },
         )
 
-        binding.filtersRecycler.viewTreeObserver.addOnScrollChangedListener {
+        recyclerView?.viewTreeObserver?.addOnScrollChangedListener {
             updateBottomButtons()
         }
 
@@ -91,10 +102,13 @@ class SourceFilterSheet(val activity: Activity) :
             updateBottomButtons()
         }
 
-        binding.filtersRecycler.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
-        binding.filtersRecycler.clipToPadding = false
-        binding.filtersRecycler.adapter = adapter
-        binding.filtersRecycler.setHasFixedSize(false)
+        recyclerView?.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
+        recyclerView?.addItemDecoration(VertPaddingDecoration(12.dpToPx))
+        recyclerView?.adapter = ConcatAdapter(
+            savedSearchesAdapter,
+            adapter,
+        )
+        recyclerView?.setHasFixedSize(false)
 
         sheetBehavior.addBottomSheetCallback(
             object : BottomSheetBehavior.BottomSheetCallback() {
@@ -109,7 +123,7 @@ class SourceFilterSheet(val activity: Activity) :
         )
     }
 
-    fun setCardViewMax(insets: WindowInsetsCompat) {
+    private fun setCardViewMax(insets: WindowInsetsCompat) {
         val fullHeight = activity.window.decorView.height
         val newHeight = fullHeight - insets.getInsets(systemBars()).top -
             binding.titleLayout.height - 75.dpToPx
@@ -123,8 +137,10 @@ class SourceFilterSheet(val activity: Activity) :
     override fun onStart() {
         super.onStart()
         sheetBehavior.collapse()
+        scrollToTop()  // Force the sheet to scroll to the very top when it shows up
         updateBottomButtons()
         binding.root.post {
+            scrollToTop()  // Force the sheet to scroll to the very top when it shows up
             updateBottomButtons()
         }
     }
@@ -132,17 +148,17 @@ class SourceFilterSheet(val activity: Activity) :
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val attrsArray = intArrayOf(AR.attr.actionBarSize)
-        val array = context.obtainStyledAttributes(attrsArray)
-        val headerHeight = array.getDimensionPixelSize(0, 0)
-        binding.titleLayout.updatePaddingRelative(
-            bottom = activity.window.decorView.rootWindowInsetsCompat
-                ?.getInsets(systemBars())?.bottom ?: 0,
-        )
+        context.withStyledAttributes(null, attrsArray) {
+            val headerHeight = getDimensionPixelSize(0, 0)
+            binding.titleLayout.updatePaddingRelative(
+                bottom = activity.window.decorView.rootWindowInsetsCompat
+                    ?.getInsets(systemBars())?.bottom ?: 0,
+            )
 
-        binding.titleLayout.updateLayoutParams<ConstraintLayout.LayoutParams> {
-            height = headerHeight + binding.titleLayout.paddingBottom
+            binding.titleLayout.updateLayoutParams<ConstraintLayout.LayoutParams> {
+                height = headerHeight + binding.titleLayout.paddingBottom
+            }
         }
-        array.recycle()
     }
 
     private fun updateBottomButtons() {
@@ -154,12 +170,14 @@ class SourceFilterSheet(val activity: Activity) :
 
     override fun dismiss() {
         super.dismiss()
-        if (filterChanged) {
-            onSearchClicked()
-        }
+        onSearchClicked()
     }
 
     fun setFilters(items: List<IFlexible<*>>) {
         adapter.updateDataSet(items)
+    }
+
+    fun scrollToTop() {
+        recyclerView?.layoutManager?.scrollToPosition(0)
     }
 }

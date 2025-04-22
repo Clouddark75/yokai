@@ -5,16 +5,20 @@ import android.content.DialogInterface
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
+import android.widget.TextView
 import androidx.annotation.CheckResult
-import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.AppCompatCheckedTextView
+import androidx.core.content.getSystemService
 import androidx.core.view.isVisible
+import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.tachiyomi.databinding.CustomDialogTitleMessageBinding
 import eu.kanade.tachiyomi.databinding.DialogQuadstateBinding
+import eu.kanade.tachiyomi.databinding.DialogTextInputBinding
 import eu.kanade.tachiyomi.widget.TriStateCheckBox
 import eu.kanade.tachiyomi.widget.materialdialogs.TriStateMultiChoiceDialogAdapter
 import eu.kanade.tachiyomi.widget.materialdialogs.TriStateMultiChoiceListener
@@ -154,4 +158,24 @@ val DialogInterface.isPromptChecked: Boolean
 
 fun interface MaterialAlertDialogBuilderOnCheckClickListener {
     fun onClick(var1: DialogInterface?, var3: Boolean)
+}
+
+fun MaterialAlertDialogBuilder.setTextInput(
+    hint: String? = null,
+    prefill: String? = null,
+    onTextChanged: (String) -> Unit,
+): MaterialAlertDialogBuilder {
+    val binding = DialogTextInputBinding.inflate(LayoutInflater.from(context))
+    binding.textField.hint = hint
+    binding.textField.editText?.apply {
+        setText(prefill, TextView.BufferType.EDITABLE)
+        doAfterTextChanged {
+            onTextChanged(it?.toString() ?: "")
+        }
+        post {
+            requestFocusFromTouch()
+            context.getSystemService<InputMethodManager>()?.showSoftInput(this, 0)
+        }
+    }
+    return setView(binding.root)
 }

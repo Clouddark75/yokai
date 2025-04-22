@@ -10,6 +10,9 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExploreOff
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.view.WindowInsetsCompat.Type.ime
 import androidx.core.view.WindowInsetsCompat.Type.systemBars
 import androidx.core.view.isVisible
@@ -46,7 +49,9 @@ import eu.kanade.tachiyomi.util.system.connectivityManager
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.e
 import eu.kanade.tachiyomi.util.system.launchIO
+import eu.kanade.tachiyomi.util.system.materialAlertDialog
 import eu.kanade.tachiyomi.util.system.openInBrowser
+import eu.kanade.tachiyomi.util.system.setTextInput
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.system.withUIContext
 import eu.kanade.tachiyomi.util.view.activityBinding
@@ -56,7 +61,11 @@ import eu.kanade.tachiyomi.util.view.inflate
 import eu.kanade.tachiyomi.util.view.isControllerVisible
 import eu.kanade.tachiyomi.util.view.scrollViewWith
 import eu.kanade.tachiyomi.util.view.setAction
+import eu.kanade.tachiyomi.util.view.setMessage
+import eu.kanade.tachiyomi.util.view.setNegativeButton
 import eu.kanade.tachiyomi.util.view.setOnQueryTextChangeListener
+import eu.kanade.tachiyomi.util.view.setPositiveButton
+import eu.kanade.tachiyomi.util.view.setTitle
 import eu.kanade.tachiyomi.util.view.snack
 import eu.kanade.tachiyomi.util.view.withFadeTransaction
 import eu.kanade.tachiyomi.widget.AutofitRecyclerView
@@ -68,6 +77,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import uy.kohesive.injekt.injectLazy
 import yokai.domain.manga.interactor.GetManga
+import yokai.domain.source.browse.filter.models.SavedSearch
 import yokai.i18n.MR
 import yokai.presentation.core.icons.CustomIcons
 import yokai.presentation.core.icons.LocalSource
@@ -140,6 +150,9 @@ open class BrowseSourceController(bundle: Bundle) :
     private var filterSheet: SourceFilterSheet? = null
     private var lastPosition: Int = -1
 
+    // Basically a cache just so the filter sheet is shown faster
+    var savedSearches by mutableStateOf(emptyList<SavedSearch>())
+
     private val isBehindGlobalSearch: Boolean
         get() = router.backstackSize >= 2 && router.backstack[router.backstackSize - 2].controller is GlobalSearchController
 
@@ -183,6 +196,7 @@ open class BrowseSourceController(bundle: Bundle) :
 
         binding.fab.isVisible = presenter.sourceFilters.isNotEmpty()
         binding.fab.setOnClickListener { showFilters() }
+
         activityBinding?.appBar?.y = 0f
         activityBinding?.appBar?.updateAppBarAfterY(recycler)
         activityBinding?.appBar?.lockYPos = true
@@ -376,12 +390,16 @@ open class BrowseSourceController(bundle: Bundle) :
         return true
     }
 
+    private fun applyFilters() {
+        val allDefault = presenter.filtersMatchDefault()
+        showProgressBar()
+        adapter?.clear()
+        presenter.setSourceFilter(if (allDefault) FilterList() else presenter.sourceFilters)
+        updatePopLatestIcons()
+    }
+
     private fun showFilters() {
         if (filterSheet != null) return
-        val sheet = SourceFilterSheet(activity!!)
-        filterSheet = sheet
-        sheet.setFilters(presenter.filterItems)
-        presenter.filtersChanged = false
         val oldFilters = mutableListOf<Any?>()
         for (i in presenter.sourceFilters) {
             if (i is Filter.Group<*>) {
@@ -394,50 +412,94 @@ open class BrowseSourceController(bundle: Bundle) :
                 oldFilters.add(i.state)
             }
         }
-        sheet.onSearchClicked = {
-            var matches = true
-            for (i in presenter.sourceFilters.indices) {
-                val filter = oldFilters.getOrNull(i)
-                if (filter is List<*>) {
-                    for (j in filter.indices) {
-                        if (filter[j] !=
-                            (
-                                (presenter.sourceFilters[i] as Filter.Group<*>).state[j] as
-                                    Filter<*>
-                                ).state
-                        ) {
-                            matches = false
-                            break
-                        }
-                    }
-                } else if (filter != presenter.sourceFilters[i].state) {
-                    matches = false
-                    break
-                }
-                if (!matches) break
-            }
-            if (!matches) {
-                val allDefault = presenter.filtersMatchDefault()
-                showProgressBar()
-                adapter?.clear()
-                presenter.setSourceFilter(if (allDefault) FilterList() else presenter.sourceFilters)
-                updatePopLatestIcons()
-            }
-        }
 
-        sheet.onResetClicked = {
-            presenter.appliedFilters = FilterList()
-            val newFilters = presenter.source.getFilterList()
-            presenter.sourceFilters = newFilters
-            sheet.setFilters(presenter.filterItems)
-        }
-        sheet.setOnDismissListener {
-            filterSheet = null
-        }
-        sheet.setOnCancelListener {
-            filterSheet = null
-        }
-        sheet.show()
+        filterSheet = SourceFilterSheet(
+            activity = activity!!,
+            searches = { savedSearches },
+            onSearchClicked = {
+                var matches = true
+                for (i in presenter.sourceFilters.indices) {
+                    val filter = oldFilters.getOrNull(i)
+                    if (filter is List<*>) {
+                        for (j in filter.indices) {
+                            if (filter[j] !=
+                                (
+                                    (presenter.sourceFilters[i] as Filter.Group<*>).state[j] as
+                                        Filter<*>
+                                    ).state
+                            ) {
+                                matches = false
+                                break
+                            }
+                        }
+                    } else if (filter != presenter.sourceFilters[i].state) {
+                        matches = false
+                        break
+                    }
+                    if (!matches) break
+                }
+                if (!matches) {
+                    applyFilters()
+                }
+            },
+            onResetClicked = {
+                presenter.appliedFilters = FilterList()
+                val newFilters = presenter.source.getFilterList()
+                presenter.sourceFilters = newFilters
+                filterSheet?.setFilters(presenter.filterItems)
+            },
+            onSaveClicked = {
+                viewScope.launchIO {
+                    val names = presenter.loadSearches().map { it.name }
+                    var searchName = ""
+                    withUIContext {
+                        activity!!.materialAlertDialog()
+                            .setTitle(activity!!.getString(MR.strings.save_search))
+                            .setTextInput(hint = activity!!.getString(MR.strings.save_search_hint)) { input ->
+                                searchName = input
+                            }
+                            .setPositiveButton(MR.strings.save) { _, _ ->
+                                if (searchName.isNotBlank() && searchName !in names) {
+                                    presenter.saveSearch(searchName.trim(), presenter.query, presenter.sourceFilters)
+                                    filterSheet?.scrollToTop()
+                                } else {
+                                    activity!!.toast(MR.strings.save_search_invalid_name)
+                                }
+                            }
+                            .setNegativeButton(MR.strings.cancel, null)
+                            .show()
+                    }
+                }
+            },
+            onSavedSearchClicked = ss@{ searchId ->
+                viewScope.launchIO {
+                    val search = presenter.loadSearch(searchId)  // Grab the latest data from database
+                    if (search?.filters == null) return@launchIO
+
+                    withUIContext {
+                        presenter.sourceFilters = search.filters
+                        filterSheet?.setFilters(presenter.filterItems)
+                        // This will call onSaveClicked()
+                        filterSheet?.dismiss()
+                    }
+                }
+            },
+            onDeleteSavedSearchClicked = { searchId ->
+                activity!!.materialAlertDialog()
+                    .setTitle(MR.strings.save_search_delete)
+                    .setMessage(MR.strings.save_search_delete)
+                    .setPositiveButton(MR.strings.cancel, null)
+                    .setNegativeButton(android.R.string.ok) { _, _ -> presenter.deleteSearch(searchId) }
+                    .show()
+            }
+        )
+        filterSheet?.setFilters(presenter.filterItems)
+        presenter.filtersChanged = false
+
+        filterSheet?.setOnCancelListener { filterSheet = null }
+        filterSheet?.setOnDismissListener { filterSheet = null }
+
+        filterSheet?.show()
     }
 
     /**

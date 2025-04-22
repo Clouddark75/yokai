@@ -28,6 +28,7 @@ import eu.kanade.tachiyomi.ui.source.filter.TextSectionItem
 import eu.kanade.tachiyomi.ui.source.filter.TriStateItem
 import eu.kanade.tachiyomi.ui.source.filter.TriStateSectionItem
 import eu.kanade.tachiyomi.util.system.launchIO
+import eu.kanade.tachiyomi.util.system.launchNonCancellableIO
 import eu.kanade.tachiyomi.util.system.withUIContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.asFlow
@@ -35,8 +36,12 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -44,6 +49,11 @@ import yokai.domain.manga.interactor.GetManga
 import yokai.domain.manga.interactor.InsertManga
 import yokai.domain.manga.interactor.UpdateManga
 import yokai.domain.manga.models.MangaUpdate
+import yokai.domain.source.browse.filter.FilterSerializer
+import yokai.domain.source.browse.filter.interactor.DeleteSavedSearch
+import yokai.domain.source.browse.filter.interactor.GetSavedSearch
+import yokai.domain.source.browse.filter.interactor.InsertSavedSearch
+import yokai.domain.source.browse.filter.models.SavedSearch
 import yokai.domain.ui.UiPreferences
 
 // FIXME: Migrate to Compose
@@ -62,6 +72,11 @@ open class BrowseSourcePresenter(
     private val getManga: GetManga by injectLazy()
     private val insertManga: InsertManga by injectLazy()
     private val updateManga: UpdateManga by injectLazy()
+
+    private val deleteSavedSearch: DeleteSavedSearch by injectLazy()
+    private val getSavedSearch: GetSavedSearch by injectLazy()
+    private val insertSavedSearch: InsertSavedSearch by injectLazy()
+    private val filterSerializer: FilterSerializer by injectLazy()
 
     /**
      * Selected source.
@@ -129,6 +144,15 @@ open class BrowseSourcePresenter(
                 }
             }
             filtersChanged = false
+
+            runBlocking { view?.savedSearches = loadSearches() }
+
+            getSavedSearch.subscribeAllBySourceId(sourceId)
+                .map { it.applyAllSave(source.getFilterList()) }
+                .onEach {
+                    withUIContext { view?.savedSearches = it }
+                }
+                .launchIn(presenterScope)
         }
     }
 
@@ -359,5 +383,34 @@ open class BrowseSourcePresenter(
                 }
             }
         }
+    }
+
+    fun saveSearch(name: String, query: String, filters: FilterList) {
+        presenterScope.launchNonCancellableIO {
+            insertSavedSearch.await(
+                sourceId,
+                name,
+                query,
+                try {
+                    Json.encodeToString(filterSerializer.serialize(filters))
+                } catch (e: Exception) {
+                    "[]"
+                },
+            )
+        }
+    }
+
+    fun deleteSearch(searchId: Long) {
+        presenterScope.launchNonCancellableIO {
+            deleteSavedSearch.await(searchId)
+        }
+    }
+
+    suspend fun loadSearch(id: Long): SavedSearch? {
+        return getSavedSearch.awaitById(id)?.applySave(source.getFilterList())
+    }
+
+    suspend fun loadSearches(): List<SavedSearch> {
+       return getSavedSearch.awaitAllBySourceId(sourceId).applyAllSave(source.getFilterList())
     }
 }

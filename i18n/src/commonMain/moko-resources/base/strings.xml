@@ -1153,6 +1153,12 @@
     <string name="default_orientation">Default orientation</string>
     <string name="orientation">Orientation</string>
     <string name="save">Save</string>
+    <string name="save_search_title">Saved searches</string>
+    <string name="save_search">Save current search query?</string>
+    <string name="save_search_hint">Save search name</string>
+    <string name="save_search_invalid_name">Invalid saved search name</string>
+    <string name="save_search_delete">Delete this saved search query?</string>
+    <string name="save_search_delete_message">Are you sure you wish to delete this saved search query: \'%1$s\'?</string>
     <string name="search">Search</string>
     <string name="search_">Search %1$s</string>
     <string name="select_all">Select all</string>

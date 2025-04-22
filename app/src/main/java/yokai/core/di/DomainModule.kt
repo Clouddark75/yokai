@@ -7,6 +7,7 @@ import yokai.data.extension.repo.ExtensionRepoRepositoryImpl
 import yokai.data.history.HistoryRepositoryImpl
 import yokai.data.library.custom.CustomMangaRepositoryImpl
 import yokai.data.manga.MangaRepositoryImpl
+import yokai.data.source.browse.filter.SavedSearchRepositoryImpl
 import yokai.data.track.TrackRepositoryImpl
 import yokai.domain.category.CategoryRepository
 import yokai.domain.category.interactor.DeleteCategories
@@ -42,6 +43,11 @@ import yokai.domain.manga.interactor.GetManga
 import yokai.domain.manga.interactor.InsertManga
 import yokai.domain.manga.interactor.UpdateManga
 import yokai.domain.recents.interactor.GetRecents
+import yokai.domain.source.browse.filter.FilterSerializer
+import yokai.domain.source.browse.filter.SavedSearchRepository
+import yokai.domain.source.browse.filter.interactor.DeleteSavedSearch
+import yokai.domain.source.browse.filter.interactor.GetSavedSearch
+import yokai.domain.source.browse.filter.interactor.InsertSavedSearch
 import yokai.domain.track.TrackRepository
 import yokai.domain.track.interactor.DeleteTrack
 import yokai.domain.track.interactor.GetTrack
@@ -95,4 +101,10 @@ fun domainModule() = module {
     factory { DeleteTrack(get()) }
     factory { GetTrack(get()) }
     factory { InsertTrack(get()) }
+
+    single<SavedSearchRepository> { SavedSearchRepositoryImpl(get()) }
+    factory { DeleteSavedSearch(get()) }
+    factory { GetSavedSearch(get()) }
+    factory { InsertSavedSearch(get()) }
+    factory { FilterSerializer() }
 }
