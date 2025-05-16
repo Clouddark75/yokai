@@ -13,10 +13,11 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 ### Additions
 - Add random library sort
 - Add the ability to save search queries
+- Add toggle to enable/disable hide source on swipe (@Hiirbaf)
 
 ### Changes
 - Temporarily disable log file
-- Categories' header now show filtered count when you search the library (If you have "Show number of items" enabled)
+- Categories' header now show filtered count when you search the library when you have "Show number of items" enabled (@LeeSF03)
 
 ### Fixes
 - Allow users to bypass onboarding's permission step if Shizuku is installed
@@ -25,6 +26,7 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Fix certain Infinix devices being unable to use any "Open link in browser" actions, including tracker setup (@MajorTanya)
 - Fix source filter bottom sheet unable to be fully scrolled to the bottom
 - Prevent potential "Comparison method violates its general contract!" crash
+- Fix staggered grid cover being squashed for local source (@AwkwardPeak7)
 
 ### Translation
 - Update translations from Weblate
@@ -47,6 +49,18 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
   - LibraryItem abstraction to make it easier to manage
   - LibraryManga no longer extend MangaImpl
 - Update dependency androidx.compose:compose-bom to v2025.01.00
+- Update dependency gradle to v8.12
+- Update user agent (@Hiirbaf)
+
+## [1.9.7.2]
+
+### Fixes
+- Fix MyAnimeList timeout issue
+
+## [1.9.7.1]
+
+### Fixes
+- Prevent `Comparison method violates its general contract!` crashes
 
 ## [1.9.7]
 
