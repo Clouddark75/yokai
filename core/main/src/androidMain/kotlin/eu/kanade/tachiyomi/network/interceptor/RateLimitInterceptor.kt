@@ -23,13 +23,13 @@ import okhttp3.Response
  */
 fun OkHttpClient.Builder.rateLimit(
     permits: Int,
-    period: Long = 1,
+    period: Long = 0,
     unit: TimeUnit = TimeUnit.SECONDS,
 ) = addInterceptor(RateLimitInterceptor(permits, period, unit))
 
 private class RateLimitInterceptor(
     private val permits: Int,
-    period: Long,
+    period: Long = 0,
     unit: TimeUnit,
 ) : Interceptor {
 
