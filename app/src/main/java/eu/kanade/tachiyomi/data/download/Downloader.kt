@@ -373,9 +373,9 @@ class Downloader(
             }
 
             // Start downloading images, consider we can have downloaded images already
-            // Concurrently do 2 pages at a time
+            // Concurrently do 6 pages at a time
             pageList.asFlow()
-                .flatMapMerge(concurrency = 2) { page ->
+                .flatMapMerge(concurrency = 6) { page ->
                     flow {
                         withIOContext { getOrDownloadImage(page, download, tmpDir) }
                         emit(page)
