@@ -64,6 +64,8 @@ import yokai.domain.category.interactor.GetCategories
 import yokai.domain.download.DownloadPreferences
 import yokai.i18n.MR
 import yokai.util.lang.getString
+import kotlinx.coroutines.channels.Channel
+import java.util.concurrent.Semaphore
 
 /**
  * This class is the one in charge of downloading chapters.
@@ -119,6 +121,8 @@ class Downloader(
             addAllToQueue(chapters.await())
         }
     }
+
+    private val chapterDownloadSemaphore = Semaphore(3)
 
     /**
      * Starts the downloader. It doesn't do anything if it's already running or there isn't anything
@@ -185,72 +189,78 @@ class Downloader(
     }
 
     private fun launchDownloaderJob() {
-        if (isRunning) return
+    if (isRunning) return
 
-        downloaderJob = scope.launch {
-            val activeDownloadsFlow = queueState.transformLatest { queue ->
-                while (true) {
-                    val activeDownloads = queue.asSequence()
-                        // Ignore completed downloads, leave them in the queue
-                        .filter {
-                            val statusValue = it.status.value
-                            Download.State.NOT_DOWNLOADED.value <= statusValue && statusValue <= Download.State.DOWNLOADING.value
-                        }
-                        .groupBy { it.source }
-                        .toList()
-                        // Concurrently download from 5 different sources
-                        .take(5)
-                        .map { (_, downloads) -> downloads.first() }
-                    emit(activeDownloads)
+    downloaderJob = scope.launch {
+        val activeDownloadsFlow = queueState.transformLatest { queue ->
+            while (true) {
+                val activeDownloads = queue.asSequence()
+                    // Ignore completed downloads, leave them in the queue
+                    .filter {
+                        val statusValue = it.status.value
+                        Download.State.NOT_DOWNLOADED.value <= statusValue && statusValue <= Download.State.DOWNLOADING.value
+                    }
+                    .groupBy { it.source }
+                    .toList()
+                    // Concurrently download from 5 different sources, but limit to 3 chapters total
+                    .take(5)
+                    .flatMap { (_, downloads) -> downloads }
+                    .take(3) // Límite de 3 capítulos simultáneos
+                emit(activeDownloads)
 
-                    if (activeDownloads.isEmpty()) break
-                    // Suspend until a download enters the ERROR state
-                    val activeDownloadsErroredFlow =
-                        combine(activeDownloads.map(Download::statusFlow)) { states ->
-                            states.contains(Download.State.ERROR)
-                        }.filter { it }
-                    activeDownloadsErroredFlow.first()
+                if (activeDownloads.isEmpty()) break
+                // Suspend until a download enters the ERROR state
+                val activeDownloadsErroredFlow =
+                    combine(activeDownloads.map(Download::statusFlow)) { states ->
+                        states.contains(Download.State.ERROR)
+                    }.filter { it }
+                activeDownloadsErroredFlow.first()
+            }
+        }.distinctUntilChanged()
+
+        // Use supervisorScope to cancel child jobs when the downloader job is cancelled
+        supervisorScope {
+            val downloadJobs = mutableMapOf<Download, Job>()
+
+            activeDownloadsFlow.collectLatest { activeDownloads ->
+                val downloadJobsToStop = downloadJobs.filter { it.key !in activeDownloads }
+                downloadJobsToStop.forEach { (download, job) ->
+                    job.cancel()
+                    downloadJobs.remove(download)
                 }
-            }.distinctUntilChanged()
 
-            // Use supervisorScope to cancel child jobs when the downloader job is cancelled
-            supervisorScope {
-                val downloadJobs = mutableMapOf<Download, Job>()
-
-                activeDownloadsFlow.collectLatest { activeDownloads ->
-                    val downloadJobsToStop = downloadJobs.filter { it.key !in activeDownloads }
-                    downloadJobsToStop.forEach { (download, job) ->
-                        job.cancel()
-                        downloadJobs.remove(download)
-                    }
-
-                    val downloadsToStart = activeDownloads.filter { it !in downloadJobs }
-                    downloadsToStart.forEach { download ->
-                        downloadJobs[download] = launchDownloadJob(download)
-                    }
+                val downloadsToStart = activeDownloads.filter { it !in downloadJobs }
+                downloadsToStart.forEach { download ->
+                    downloadJobs[download] = launchDownloadJob(download)
                 }
             }
         }
     }
+}
 
     private fun CoroutineScope.launchDownloadJob(download: Download) = launchIO {
-        try {
-            downloadChapter(download)
+    // Adquirir semáforo para limitar a 3 descargas simultáneas
+    chapterDownloadSemaphore.acquire()
+    try {
+        downloadChapter(download)
 
-            // Remove successful download from queue
-            if (download.status == Download.State.DOWNLOADED) {
-                removeFromQueue(download)
-            }
-            if (areAllDownloadsFinished()) {
-                stop()
-            }
-        } catch (e: Throwable) {
-            if (e is CancellationException) throw e
-            Logger.e(e)
-            notifier.onError(e.message)
+        // Remove successful download from queue
+        if (download.status == Download.State.DOWNLOADED) {
+            removeFromQueue(download)
+        }
+        if (areAllDownloadsFinished()) {
             stop()
         }
+    } catch (e: Throwable) {
+        if (e is CancellationException) throw e
+        Logger.e(e)
+        notifier.onError(e.message)
+        stop()
+    } finally {
+        // Liberar semáforo
+        chapterDownloadSemaphore.release()
     }
+}
 
     /**
      * Destroys the downloader subscriptions.
@@ -375,7 +385,7 @@ class Downloader(
             // Start downloading images, consider we can have downloaded images already
             // Concurrently do 6 pages at a time
             pageList.asFlow()
-                .flatMapMerge(concurrency = 6) { page ->
+                .flatMapMerge(concurrency = 4) { page ->
                     flow {
                         withIOContext { getOrDownloadImage(page, download, tmpDir) }
                         emit(page)
