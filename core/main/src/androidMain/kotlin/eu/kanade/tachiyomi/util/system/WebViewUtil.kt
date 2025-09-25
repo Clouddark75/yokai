@@ -27,6 +27,17 @@ object WebViewUtil {
     }
 }
 
+fun spoofedPackageName(context: Context): String {
+        return try {
+            context.packageManager.getPackageInfo(CHROME_PACKAGE, PackageManager.GET_META_DATA)
+
+            CHROME_PACKAGE
+        } catch (_: PackageManager.NameNotFoundException) {
+            SYSTEM_SETTINGS_PACKAGE
+        }
+    }
+}
+
 fun WebView.isOutdated(): Boolean {
     return getWebViewMajorVersion() < WebViewUtil.MINIMUM_WEBVIEW_VERSION
 }
