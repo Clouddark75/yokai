@@ -55,12 +55,13 @@ import eu.kanade.tachiyomi.ui.source.SourcePresenter
 import eu.kanade.tachiyomi.util.manga.MangaCoverMetadata
 import eu.kanade.tachiyomi.util.system.AuthenticatorUtil
 import eu.kanade.tachiyomi.util.system.GLUtil
-import eu.kanade.tachiyomi.util.system.ImageUtil
 import eu.kanade.tachiyomi.util.system.WebViewUtil
+import eu.kanade.tachiyomi.util.system.ImageUtil
 import eu.kanade.tachiyomi.util.system.launchIO
 import eu.kanade.tachiyomi.util.system.localeContext
 import eu.kanade.tachiyomi.util.system.notification
 import eu.kanade.tachiyomi.util.system.setToDefault
+import java.security.Security
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -81,16 +82,12 @@ import yokai.domain.base.BasePreferences
 import yokai.domain.storage.StorageManager
 import yokai.i18n.MR
 import yokai.util.lang.getString
-import java.security.Security
-
-private const val ACTION_DISABLE_INCOGNITO_MODE = "tachi.action.DISABLE_INCOGNITO_MODE"
 
 open class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factory {
 
-    // Injected dependencies
-    private val preferences: PreferencesHelper by injectLazy()
-    private val basePreferences: BasePreferences by injectLazy()
-    private val networkPreferences: NetworkPreferences by injectLazy()
+    val preferences: PreferencesHelper by injectLazy()
+    val basePreferences: BasePreferences by injectLazy()
+    val networkPreferences: NetworkPreferences by injectLazy()
     private val storageManager: StorageManager by injectLazy()
 
     private val disableIncognitoReceiver = DisableIncognitoReceiver()
@@ -99,236 +96,127 @@ open class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.F
     override fun onCreate() {
         super<Application>.onCreate()
 
-        setupSecurity()
-        setupWebView()
-        setupDependencyInjection()
-        setupLifecycleObserver()
-        setupPreferencesObservers()
-        setupNotificationChannels()
-        setupImageConfiguration()
-        setupWidgets()
-        setupIncognitoModeObserver()
-        initializeMigrator()
-    }
-
-    override fun attachBaseContext(base: Context) {
-        super.attachBaseContext(base)
-        MultiDex.install(this)
-    }
-
-    override fun getPackageName(): String {
-        return try {
-            // Override the value passed as X-Requested-With in WebView requests
-            val stackTrace = Looper.getMainLooper().thread.stackTrace
-            val isChromiumCall = stackTrace.any { trace ->
-                trace.className.lowercase() in CHROMIUM_CLASSES &&
-                    trace.methodName.lowercase() in CHROMIUM_METHODS
-            }
-
-            if (isChromiumCall) {
-                WebViewUtil.spoofedPackageName(applicationContext)
-            } else {
-                super.getPackageName()
-            }
-        } catch (_: Exception) {
-            super.getPackageName()
-        }
-    }
-
-    override fun onPause(owner: LifecycleOwner) {
-        if (!AuthenticatorUtil.isAuthenticating && preferences.lockAfter().get() >= 0) {
-            SecureActivityDelegate.locked = true
-        }
-    }
-
-    override fun onLowMemory() {
-        super.onLowMemory()
-        LibraryPresenter.onLowMemory()
-        RecentsPresenter.onLowMemory()
-        SourcePresenter.onLowMemory()
-    }
-
-    override fun newImageLoader(context: PlatformContext): ImageLoader {
-        return ImageLoader.Builder(this@App).apply {
-            val callFactoryLazy = lazy { Injekt.get<NetworkHelper>().client }
-            
-            components {
-                // NetworkFetcher.Factory
-                add(OkHttpNetworkFetcherFactory(callFactoryLazy::value))
-                // Decoder.Factory
-                add(TachiyomiImageDecoder.Factory())
-                // Fetcher.Factory
-                add(BufferedSourceFetcher.Factory())
-                add(MangaCoverFetcher.MangaFactory(callFactoryLazy))
-                add(MangaCoverFetcher.MangaCoverFactory(callFactoryLazy))
-                // Keyer
-                add(MangaKeyer())
-                add(MangaCoverKeyer())
-            }
-            
-            crossfade(true)
-            allowRgb565(this@App.getSystemService<ActivityManager>()!!.isLowRamDevice)
-            allowHardware(true)
-            
-            if (networkPreferences.verboseLogging().get()) {
-                logger(DebugLogger())
-            }
-
-            fetcherCoroutineContext(Dispatchers.IO.limitedParallelism(8))
-            decoderCoroutineContext(Dispatchers.IO.limitedParallelism(3))
-        }.build()
-    }
-
-    protected open fun setupNotificationChannels() {
-        Notifications.createChannels(this)
-    }
-
-    // Private setup methods
-    private fun setupSecurity() {
         // TLS 1.3 support for Android 10 and below
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             Security.insertProviderAt(Conscrypt.newProvider(), 1)
         }
-    }
 
-    private fun setupWebView() {
         // Avoid potential crashes
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val process = getProcessName()
-            if (packageName != process) {
-                WebView.setDataDirectorySuffix(process)
-            }
+            if (packageName != process) WebView.setDataDirectorySuffix(process)
         }
-    }
 
-    private fun setupDependencyInjection() {
         startKoin {
             modules(preferenceModule(this@App), appModule(this@App), domainModule())
         }
         initExpensiveComponents(this)
-    }
 
-    private fun setupLifecycleObserver() {
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
-    }
 
-    private fun setupPreferencesObservers() {
         val scope = ProcessLifecycleOwner.get().lifecycleScope
 
-        // Verbose logging observer
         networkPreferences.verboseLogging().changes()
             .onEach { enabled ->
+                // FlexibleAdapter.enableLogs(if (enabled) Level.VERBOSE else Level.SUPPRESS)
                 Logger.setToDefault(buildLogWritersToAdd(storageManager.getLogsDirectory(), enabled))
             }
             .launchIn(scope)
 
-        // Crash report observer
         basePreferences.crashReport().changes()
-            .onEach { enabled ->
+            .onEach {
                 try {
-                    Firebase.crashlytics.setCrashlyticsCollectionEnabled(enabled)
+                    Firebase.crashlytics.setCrashlyticsCollectionEnabled(it)
                 } catch (e: Exception) {
                     // Probably already enabled/disabled
                 }
             }
             .launchIn(scope)
 
-        // Night mode observer
-        preferences.nightMode().changes()
-            .onEach { mode -> AppCompatDelegate.setDefaultNightMode(mode) }
-            .launchIn(scope)
+        setupNotificationChannels()
 
-        // Hardware bitmap threshold observer
-        basePreferences.hardwareBitmapThreshold().changes()
-            .onEach { threshold -> ImageUtil.hardwareBitmapThreshold = threshold }
-            .launchIn(scope)
-    }
-
-    private fun setupImageConfiguration() {
         MangaCoverMetadata.load()
+        preferences.nightMode().changes()
+            .onEach { AppCompatDelegate.setDefaultNightMode(it) }
+            .launchIn(scope)
 
-        // Set hardware bitmap threshold if not already set
         basePreferences.hardwareBitmapThreshold().let { preference ->
-            if (!preference.isSet()) {
-                preference.set(GLUtil.DEVICE_TEXTURE_LIMIT)
-            }
+            if (!preference.isSet()) preference.set(GLUtil.DEVICE_TEXTURE_LIMIT)
         }
-    }
+        basePreferences.hardwareBitmapThreshold().changes()
+            .onEach { ImageUtil.hardwareBitmapThreshold = it }
+            .launchIn(scope)
 
-    private fun setupWidgets() {
-        ProcessLifecycleOwner.get().lifecycleScope.launchIO {
-            with(TachiyomiWidgetManager()) { 
-                this@App.init() 
-            }
+        scope.launchIO {
+            with(TachiyomiWidgetManager()) { this@App.init() }
         }
-    }
 
-    private fun setupIncognitoModeObserver() {
-        val scope = ProcessLifecycleOwner.get().lifecycleScope
-
+        // Show notification to disable Incognito Mode when it's enabled
         preferences.incognitoMode().changes()
             .onEach { enabled ->
                 val notificationManager = NotificationManagerCompat.from(this)
-                
                 if (enabled) {
-                    showIncognitoNotification(notificationManager)
+                    disableIncognitoReceiver.register()
+                    val nContext = localeContext
+                    val notification = nContext.notification(Notifications.CHANNEL_INCOGNITO_MODE) {
+                        val incogText = nContext.getString(MR.strings.incognito_mode)
+                        setContentTitle(incogText)
+                        setContentText(nContext.getString(MR.strings.turn_off_, incogText))
+                        setSmallIcon(R.drawable.ic_incognito_24dp)
+                        setOngoing(true)
+
+                        val pendingIntent = PendingIntent.getBroadcast(
+                            this@App,
+                            0,
+                            Intent(ACTION_DISABLE_INCOGNITO_MODE),
+                            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE,
+                        )
+                        setContentIntent(pendingIntent)
+                    }
+                    if (ActivityCompat.checkSelfPermission(
+                            this,
+                            Manifest.permission.POST_NOTIFICATIONS,
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        return@onEach
+                    }
+                    notificationManager.notify(Notifications.ID_INCOGNITO_MODE, notification)
                 } else {
-                    hideIncognitoNotification(notificationManager)
+                    disableIncognitoReceiver.unregister()
+                    notificationManager.cancel(Notifications.ID_INCOGNITO_MODE)
                 }
             }
             .launchIn(scope)
+
+        initializeMigrator()
     }
 
-    private fun showIncognitoNotification(notificationManager: NotificationManagerCompat) {
-        if (!hasNotificationPermission()) return
+    override fun getPackageName(): String {
+        try {
+            // Override the value passed as X-Requested-With in WebView requests
+            val stackTrace = Looper.getMainLooper().thread.stackTrace
+            val isChromiumCall = stackTrace.any { trace ->
+                trace.className.lowercase() in setOf("org.chromium.base.buildinfo", "org.chromium.base.apkinfo") &&
+                    trace.methodName.lowercase() in setOf("getall", "getpackagename", "<init>")
+            }
 
-        disableIncognitoReceiver.register()
-        
-        val nContext = localeContext
-        val notification = nContext.notification(Notifications.CHANNEL_INCOGNITO_MODE) {
-            val incogText = nContext.getString(MR.strings.incognito_mode)
-            setContentTitle(incogText)
-            setContentText(nContext.getString(MR.strings.turn_off_, incogText))
-            setSmallIcon(R.drawable.ic_incognito_24dp)
-            setOngoing(true)
-
-            val pendingIntent = PendingIntent.getBroadcast(
-                this@App,
-                0,
-                Intent(ACTION_DISABLE_INCOGNITO_MODE),
-                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE,
-            )
-            setContentIntent(pendingIntent)
+            if (isChromiumCall) return WebViewUtil.spoofedPackageName(applicationContext)
+        } catch (_: Exception) {
         }
-        
-        notificationManager.notify(Notifications.ID_INCOGNITO_MODE, notification)
-    }
 
-    private fun hideIncognitoNotification(notificationManager: NotificationManagerCompat) {
-        disableIncognitoReceiver.unregister()
-        notificationManager.cancel(Notifications.ID_INCOGNITO_MODE)
-    }
-
-    private fun hasNotificationPermission(): Boolean {
-        return ActivityCompat.checkSelfPermission(
-            this,
-            Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
+        return super.getPackageName()
     }
 
     private fun initializeMigrator() {
         val preferenceStore = Injekt.get<PreferenceStore>()
+
         val preference = preferenceStore.getInt(
             Preference.appStateKey("last_version_code"),
             0,
         )
-        
-        if (preference.get() < 141) {
-            preference.set(0)
-        }
+        if (preference.get() < 141) preference.set(0)
 
         Logger.i { "Migration from ${preference.get()} to ${BuildConfig.VERSION_CODE}" }
-        
         Migrator.initialize(
             old = preference.get(),
             new = BuildConfig.VERSION_CODE,
@@ -338,6 +226,28 @@ open class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.F
                 preference.set(BuildConfig.VERSION_CODE)
             },
         )
+    }
+
+    override fun onPause(owner: LifecycleOwner) {
+        if (!AuthenticatorUtil.isAuthenticating && preferences.lockAfter().get() >= 0) {
+            SecureActivityDelegate.locked = true
+        }
+    }
+
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base)
+        MultiDex.install(this)
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        LibraryPresenter.onLowMemory()
+        RecentsPresenter.onLowMemory()
+        SourcePresenter.onLowMemory()
+    }
+
+    protected open fun setupNotificationChannels() {
+        Notifications.createChannels(this)
     }
 
     private inner class DisableIncognitoReceiver : BroadcastReceiver() {
@@ -367,21 +277,36 @@ open class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.F
         }
     }
 
-    companion object {
-        private val CHROMIUM_CLASSES = setOf(
-            "org.chromium.base.buildinfo",
-            "org.chromium.base.apkinfo"
-        )
-        
-        private val CHROMIUM_METHODS = setOf(
-            "getall",
-            "getpackagename",
-            "<init>"
-        )
+    override fun newImageLoader(context: PlatformContext): ImageLoader {
+        return ImageLoader.Builder(this@App).apply {
+            val callFactoryLazy = lazy { Injekt.get<NetworkHelper>().client }
+            components {
+                // NetworkFetcher.Factory
+                add(OkHttpNetworkFetcherFactory(callFactoryLazy::value))
+                // Decoder.Factory
+                add(TachiyomiImageDecoder.Factory())
+                // Fetcher.Factory
+                add(BufferedSourceFetcher.Factory())
+                add(MangaCoverFetcher.MangaFactory(callFactoryLazy))
+                add(MangaCoverFetcher.MangaCoverFactory(callFactoryLazy))
+                // Keyer
+                add(MangaKeyer())
+                add(MangaCoverKeyer())
+            }
+            crossfade(true)
+            allowRgb565(this@App.getSystemService<ActivityManager>()!!.isLowRamDevice)
+            allowHardware(true)
+            if (networkPreferences.verboseLogging().get()) {
+                logger(DebugLogger())
+            }
+
+            fetcherCoroutineContext(Dispatchers.IO.limitedParallelism(8))
+            decoderCoroutineContext(Dispatchers.IO.limitedParallelism(3))
+        }
+            .build()
     }
 }
 
-// Extension functions
 fun buildLogWritersToAdd(logPath: UniFile?): List<LogWriter> {
     val networkPreferences: NetworkPreferences = Injekt.get()
     return buildLogWritersToAdd(logPath, networkPreferences.verboseLogging().get())
@@ -390,13 +315,10 @@ fun buildLogWritersToAdd(logPath: UniFile?): List<LogWriter> {
 fun buildLogWritersToAdd(
     logPath: UniFile?,
     isVerbose: Boolean,
-): List<LogWriter> = buildList {
-    if (!BuildConfig.DEBUG) {
-        add(CrashlyticsLogWriter())
-    }
+) = buildList {
+    if (!BuildConfig.DEBUG) add(CrashlyticsLogWriter())
 
-    // Uncomment when needed
-    // if (logPath != null && !BuildConfig.DEBUG) {
-    //     add(RollingUniFileLogWriter(logPath = logPath, isVerbose = isVerbose))
-    // }
+ //   if (logPath != null && !BuildConfig.DEBUG) add(RollingUniFileLogWriter(logPath = logPath, isVerbose = isVerbose))
 }
+
+private const val ACTION_DISABLE_INCOGNITO_MODE = "tachi.action.DISABLE_INCOGNITO_MODE"
