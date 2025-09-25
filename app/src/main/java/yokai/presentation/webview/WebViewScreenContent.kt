@@ -40,11 +40,16 @@ import com.kevinnzou.web.rememberWebViewNavigator
 import com.kevinnzou.web.rememberWebViewState
 import dev.icerock.moko.resources.compose.stringResource
 import eu.kanade.tachiyomi.BuildConfig
+import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.util.system.WebViewUtil
 import eu.kanade.tachiyomi.util.system.extensionIntentForText
 import eu.kanade.tachiyomi.util.system.getHtml
 import eu.kanade.tachiyomi.util.system.setDefaultSettings
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
+import okhttp3.Request
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import yokai.i18n.MR
 import yokai.presentation.component.AppBar
 import yokai.presentation.component.AppBarActions
@@ -66,9 +71,12 @@ fun WebViewScreenContent(
 ) {
     val state = rememberWebViewState(url = url, additionalHttpHeaders = headers)
     val navigator = rememberWebViewNavigator()
+    val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val network = remember { Injekt.get<NetworkHelper>() }
+    val spoofedPackageName = remember { WebViewUtil.spoofedPackageName(context) }
 
     var currentUrl by remember { mutableStateOf(url) }
     var showCloudflareHelp by remember { mutableStateOf(false) }
@@ -122,6 +130,40 @@ fun WebViewScreenContent(
                     view?.loadUrl(it.url.toString(), headers)
                 }
                 return super.shouldOverrideUrlLoading(view, request)
+            }
+
+            override fun shouldInterceptRequest(
+                view: WebView?,
+                request: WebResourceRequest?,
+            ): WebResourceResponse? {
+                return try {
+                    val internalRequest = Request.Builder().apply {
+                        url(request!!.url.toString())
+                        request.requestHeaders.forEach { (key, value) ->
+                            if (key == "X-Requested-With" && value in setOf(context.packageName, spoofedPackageName)) {
+                                return@forEach
+                            }
+                            addHeader(key, value)
+                        }
+                        method(request.method, null)
+                    }.build()
+
+                    val response = network.nonCloudflareClient.newCall(internalRequest).execute()
+
+                    val contentType = response.body.contentType()?.let { "${it.type}/${it.subtype}" } ?: "text/html"
+                    val contentEncoding = response.body.contentType()?.charset()?.name() ?: "utf-8"
+
+                    WebResourceResponse(
+                        contentType,
+                        contentEncoding,
+                        response.code,
+                        response.message,
+                        response.headers.associate { it.first to it.second },
+                        response.body.byteStream(),
+                    )
+                } catch (e: Throwable) {
+                    super.shouldInterceptRequest(view, request)
+                }
             }
         }
     }
