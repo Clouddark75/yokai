@@ -11,7 +11,25 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 object WebViewUtil {
+    private const val CHROME_PACKAGE = "com.android.chrome"
+    private const val SYSTEM_SETTINGS_PACKAGE = "com.android.settings"
+    
     const val MINIMUM_WEBVIEW_VERSION = 114
+
+    fun getInferredUserAgent(context: Context): String {
+        return WebView(context)
+            .getDefaultUserAgentString()
+            .replace("; Android .*?\\)".toRegex(), "; Android 10; K)")
+            .replace("Version/.* Chrome/".toRegex(), "Chrome/")
+    }
+
+    fun getVersion(context: Context): String {
+        val webView = WebView.getCurrentWebViewPackage() ?: return "how did you get here?"
+        val pm = context.packageManager
+        val label = webView.applicationInfo!!.loadLabel(pm)
+        val version = webView.versionName
+        return "$label $version"
+    }
 
     fun supportsWebView(context: Context): Boolean {
         try {
