@@ -5,19 +5,22 @@ import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
 import eu.kanade.tachiyomi.network.interceptor.IgnoreGzipInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
-import java.io.File
-import java.util.concurrent.TimeUnit
 import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.brotli.BrotliInterceptor
+import java.io.File
+import java.util.concurrent.TimeUnit
 
 class NetworkHelper(
     val context: Context,
     private val preferences: NetworkPreferences,
-    private val block: (OkHttpClient.Builder) -> Unit,
+    private val block: (OkHttpClient.Builder) -> Unit = {},
 ) {
 
     val cookieJar = AndroidCookieJar()
+
+    val defaultUserAgent: String
+        get() = preferences.defaultUserAgent().get().replace("\n", " ").trim()
 
     private val clientBuilder: OkHttpClient.Builder = run {
         val builder = OkHttpClient.Builder()
@@ -29,13 +32,17 @@ class NetworkHelper(
                 Cache(
                     directory = File(context.cacheDir, "network_cache"),
                     maxSize = 5L * 1024 * 1024, // 5 MiB
-                )
+                ),
             )
             .addInterceptor(UncaughtExceptionInterceptor())
             .addInterceptor(UserAgentInterceptor(::defaultUserAgent))
             .addNetworkInterceptor(IgnoreGzipInterceptor())
             .addNetworkInterceptor(BrotliInterceptor)
 
+        // Apply custom configuration block
+        block(builder)
+
+        // Configure DoH provider
         when (preferences.dohProvider().get()) {
             PREF_DOH_CLOUDFLARE -> builder.dohCloudflare()
             PREF_DOH_GOOGLE -> builder.dohGoogle()
@@ -53,11 +60,11 @@ class NetworkHelper(
         }
     }
 
-    val nonCloudflareClient = clientBuilder.build()
+    val nonCloudflareClient: OkHttpClient = clientBuilder.build()
 
-    val client = clientBuilder
+    val client: OkHttpClient = clientBuilder
         .addInterceptor(
-            CloudflareInterceptor(context, cookieJar, ::defaultUserAgentProvider),
+            CloudflareInterceptor(context, cookieJar, ::defaultUserAgent),
         )
         .build()
 
@@ -65,6 +72,5 @@ class NetworkHelper(
     @Suppress("UNUSED")
     val cloudflareClient: OkHttpClient = client
 
-    val defaultUserAgent
-        get() = preferences.defaultUserAgent().get().replace("\n", " ").trim()
+    private fun defaultUserAgentProvider(): String = defaultUserAgent
 }
