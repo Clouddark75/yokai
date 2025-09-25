@@ -43,12 +43,10 @@ object WebViewUtil {
 
         return context.packageManager.hasSystemFeature(PackageManager.FEATURE_WEBVIEW)
     }
-}
 
-fun spoofedPackageName(context: Context): String {
+    fun spoofedPackageName(context: Context): String {
         return try {
             context.packageManager.getPackageInfo(CHROME_PACKAGE, PackageManager.GET_META_DATA)
-
             CHROME_PACKAGE
         } catch (_: PackageManager.NameNotFoundException) {
             SYSTEM_SETTINGS_PACKAGE
@@ -56,6 +54,7 @@ fun spoofedPackageName(context: Context): String {
     }
 }
 
+// Extension functions for WebView
 fun WebView.isOutdated(): Boolean {
     return getWebViewMajorVersion() < WebViewUtil.MINIMUM_WEBVIEW_VERSION
 }
@@ -74,6 +73,13 @@ fun WebView.setDefaultSettings() {
     }
 }
 
+suspend fun WebView.getHtml(): String = suspendCancellableCoroutine { continuation ->
+    evaluateJavascript("document.documentElement.outerHTML") { html -> 
+        continuation.resume(html) 
+    }
+}
+
+// Private extension functions
 private fun WebView.getWebViewMajorVersion(): Int {
     val uaRegexMatch = """.*Chrome/(\d+)\..*""".toRegex().matchEntire(getDefaultUserAgentString())
     return if (uaRegexMatch != null && uaRegexMatch.groupValues.size > 1) {
@@ -95,8 +101,4 @@ private fun WebView.getDefaultUserAgentString(): String {
     settings.userAgentString = originalUA
 
     return defaultUserAgentString
-}
-
-suspend fun WebView.getHtml(): String = suspendCancellableCoroutine {
-    evaluateJavascript("document.documentElement.outerHTML") { html -> it.resume(html) }
 }
