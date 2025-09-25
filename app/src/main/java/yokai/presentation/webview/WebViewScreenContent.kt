@@ -3,6 +3,7 @@ package yokai.presentation.webview
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -73,7 +74,6 @@ fun WebViewScreenContent(
     val navigator = rememberWebViewNavigator()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val network = remember { Injekt.get<NetworkHelper>() }
     val spoofedPackageName = remember { WebViewUtil.spoofedPackageName(context) }
@@ -82,190 +82,40 @@ fun WebViewScreenContent(
     var showCloudflareHelp by remember { mutableStateOf(false) }
 
     val webClient = remember {
-        object : AccompanistWebViewClient() {
-            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                super.onPageStarted(view, url, favicon)
-                url?.let {
-                    currentUrl = it
-                    onUrlChange(it)
-                }
-            }
-
-            override fun onPageFinished(view: WebView, url: String?) {
-                super.onPageFinished(view, url)
+        createWebViewClient(
+            onUrlChange = { newUrl ->
+                currentUrl = newUrl
+                onUrlChange(newUrl)
+            },
+            onPageFinished = { view ->
                 scope.launch {
                     val html = view.getHtml()
-                    showCloudflareHelp = "window._cf_chl_opt" in html || "Ray ID is" in html
+                    showCloudflareHelp = isCloudflareChallenge(html)
                 }
-            }
-
-            override fun doUpdateVisitedHistory(
-                view: WebView,
-                url: String?,
-                isReload: Boolean,
-            ) {
-                super.doUpdateVisitedHistory(view, url, isReload)
-                url?.let {
-                    currentUrl = it
-                    onUrlChange(it)
-                }
-            }
-
-            override fun shouldOverrideUrlLoading(
-                view: WebView?,
-                request: WebResourceRequest?,
-            ): Boolean {
-                request?.let {
-                    // Don't attempt to open blobs as webpages
-                    if (it.url.toString().startsWith("blob:http")) {
-                        return false
-                    }
-
-                    // Ignore intents urls
-                    if (it.url.toString().startsWith("intent://")) {
-                        return true
-                    }
-
-                    // Continue with request, but with custom headers
-                    view?.loadUrl(it.url.toString(), headers)
-                }
-                return super.shouldOverrideUrlLoading(view, request)
-            }
-
-            override fun shouldInterceptRequest(
-                view: WebView?,
-                request: WebResourceRequest?,
-            ): WebResourceResponse? {
-                return try {
-                    val internalRequest = Request.Builder().apply {
-                        url(request!!.url.toString())
-                        request.requestHeaders.forEach { (key, value) ->
-                            if (key == "X-Requested-With" && value in setOf(context.packageName, spoofedPackageName)) {
-                                return@forEach
-                            }
-                            addHeader(key, value)
-                        }
-                        method(request.method, null)
-                    }.build()
-
-                    val response = network.nonCloudflareClient.newCall(internalRequest).execute()
-
-                    val contentType = response.body.contentType()?.let { "${it.type}/${it.subtype}" } ?: "text/html"
-                    val contentEncoding = response.body.contentType()?.charset()?.name() ?: "utf-8"
-
-                    WebResourceResponse(
-                        contentType,
-                        contentEncoding,
-                        response.code,
-                        response.message,
-                        response.headers.associate { it.first to it.second },
-                        response.body.byteStream(),
-                    )
-                } catch (e: Throwable) {
-                    super.shouldInterceptRequest(view, request)
-                }
-            }
-        }
+            },
+            headers = headers,
+            network = network,
+            context = context,
+            spoofedPackageName = spoofedPackageName,
+        )
     }
 
-    Scaffold (
+    Scaffold(
         topBar = {
-            Box {
-                Column {
-                    TopAppBar(
-                        title = {
-                            AppBarTitle(
-                                title = state.pageTitle ?: initialTitle,
-                                subtitle = currentUrl,
-                            )
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = onNavigateUp) {
-                                UpIcon(navigationIcon = Icons.Outlined.Close)
-                            }
-                        },
-                        actions = {
-                            AppBarActions(
-                                persistentListOf(
-                                    AppBar.Action(
-                                        title = stringResource(MR.strings.action_webview_back),
-                                        icon = Icons.AutoMirrored.Outlined.ArrowBack,
-                                        onClick = {
-                                            if (navigator.canGoBack) {
-                                                navigator.navigateBack()
-                                            }
-                                        },
-                                        enabled = navigator.canGoBack,
-                                    ),
-                                    AppBar.Action(
-                                        title = stringResource(MR.strings.action_webview_forward),
-                                        icon = Icons.AutoMirrored.Outlined.ArrowForward,
-                                        onClick = {
-                                            if (navigator.canGoForward) {
-                                                navigator.navigateForward()
-                                            }
-                                        },
-                                        enabled = navigator.canGoForward,
-                                    ),
-                                    AppBar.OverflowAction(
-                                        title = stringResource(MR.strings.action_webview_refresh),
-                                        onClick = { navigator.reload() },
-                                    ),
-                                    AppBar.OverflowAction(
-                                        title = stringResource(MR.strings.share),
-                                        onClick = { onShare(currentUrl) },
-                                    ),
-                                    AppBar.OverflowAction(
-                                        title = stringResource(MR.strings.open_in_app),
-                                        onClick = { onOpenInApp(currentUrl) },
-                                        isVisible = navigator.canGoBack &&
-                                            context.extensionIntentForText(currentUrl) != null,
-                                    ),
-                                    AppBar.OverflowAction(
-                                        title = stringResource(MR.strings.open_in_browser),
-                                        onClick = { onOpenInBrowser(currentUrl) },
-                                    ),
-                                    AppBar.OverflowAction(
-                                        title = stringResource(MR.strings.clear_cookies),
-                                        onClick = { onClearCookies(currentUrl) },
-                                    ),
-                                ),
-                            )
-                        },
-                    )
-
-                    if (showCloudflareHelp) {
-                        Surface(
-                            modifier = Modifier.padding(8.dp),
-                        ) {
-                            WarningBanner(
-                                textRes = MR.strings.information_cloudflare_help,
-                                modifier = Modifier
-                                    .clip(MaterialTheme.shapes.small)
-                                    .clickable {
-                                        uriHandler.openUri(
-                                            "https://mihon.app/docs/guides/troubleshooting/#cloudflare",
-                                        )
-                                    },
-                            )
-                        }
-                    }
-                }
-                when (val loadingState = state.loadingState) {
-                    is LoadingState.Initializing -> LinearProgressIndicator(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.BottomCenter),
-                    )
-                    is LoadingState.Loading -> LinearProgressIndicator(
-                        progress = { (loadingState as? LoadingState.Loading)?.progress ?: 1f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.BottomCenter),
-                    )
-                    else -> {}
-                }
-            }
+            WebViewTopBar(
+                state = state,
+                initialTitle = initialTitle,
+                currentUrl = currentUrl,
+                navigator = navigator,
+                showCloudflareHelp = showCloudflareHelp,
+                uriHandler = uriHandler,
+                context = context,
+                onNavigateUp = onNavigateUp,
+                onShare = onShare,
+                onOpenInApp = onOpenInApp,
+                onOpenInBrowser = onOpenInBrowser,
+                onClearCookies = onClearCookies,
+            )
         },
     ) { contentPadding ->
         WebView(
@@ -276,20 +126,260 @@ fun WebViewScreenContent(
                 .imePadding(),
             navigator = navigator,
             onCreated = { webView ->
-                webView.setDefaultSettings()
-
-                // Debug mode (chrome://inspect/#devices)
-                if (BuildConfig.DEBUG &&
-                    0 != webView.context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE
-                ) {
-                    WebView.setWebContentsDebuggingEnabled(true)
-                }
-
-                headers["user-agent"]?.let {
-                    webView.settings.userAgentString = it
-                }
+                configureWebView(webView, headers)
             },
             client = webClient,
         )
     }
 }
+
+@Composable
+private fun WebViewTopBar(
+    state: com.kevinnzou.web.WebViewState,
+    initialTitle: String?,
+    currentUrl: String,
+    navigator: com.kevinnzou.web.WebViewNavigator,
+    showCloudflareHelp: Boolean,
+    uriHandler: androidx.compose.ui.platform.UriHandler,
+    context: android.content.Context,
+    onNavigateUp: () -> Unit,
+    onShare: (String) -> Unit,
+    onOpenInApp: (String) -> Unit,
+    onOpenInBrowser: (String) -> Unit,
+    onClearCookies: (String) -> Unit,
+) {
+    Box {
+        Column {
+            TopAppBar(
+                title = {
+                    AppBarTitle(
+                        title = state.pageTitle ?: initialTitle,
+                        subtitle = currentUrl,
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateUp) {
+                        UpIcon(navigationIcon = Icons.Outlined.Close)
+                    }
+                },
+                actions = {
+                    WebViewActions(
+                        navigator = navigator,
+                        currentUrl = currentUrl,
+                        context = context,
+                        onShare = onShare,
+                        onOpenInApp = onOpenInApp,
+                        onOpenInBrowser = onOpenInBrowser,
+                        onClearCookies = onClearCookies,
+                    )
+                },
+            )
+
+            if (showCloudflareHelp) {
+                CloudflareHelpBanner(uriHandler = uriHandler)
+            }
+        }
+
+        LoadingIndicator(
+            loadingState = state.loadingState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+}
+
+@Composable
+private fun WebViewActions(
+    navigator: com.kevinnzou.web.WebViewNavigator,
+    currentUrl: String,
+    context: android.content.Context,
+    onShare: (String) -> Unit,
+    onOpenInApp: (String) -> Unit,
+    onOpenInBrowser: (String) -> Unit,
+    onClearCookies: (String) -> Unit,
+) {
+    AppBarActions(
+        persistentListOf(
+            AppBar.Action(
+                title = stringResource(MR.strings.action_webview_back),
+                icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                onClick = { navigator.navigateBack() },
+                enabled = navigator.canGoBack,
+            ),
+            AppBar.Action(
+                title = stringResource(MR.strings.action_webview_forward),
+                icon = Icons.AutoMirrored.Outlined.ArrowForward,
+                onClick = { navigator.navigateForward() },
+                enabled = navigator.canGoForward,
+            ),
+            AppBar.OverflowAction(
+                title = stringResource(MR.strings.action_webview_refresh),
+                onClick = { navigator.reload() },
+            ),
+            AppBar.OverflowAction(
+                title = stringResource(MR.strings.share),
+                onClick = { onShare(currentUrl) },
+            ),
+            AppBar.OverflowAction(
+                title = stringResource(MR.strings.open_in_app),
+                onClick = { onOpenInApp(currentUrl) },
+                isVisible = navigator.canGoBack &&
+                    context.extensionIntentForText(currentUrl) != null,
+            ),
+            AppBar.OverflowAction(
+                title = stringResource(MR.strings.open_in_browser),
+                onClick = { onOpenInBrowser(currentUrl) },
+            ),
+            AppBar.OverflowAction(
+                title = stringResource(MR.strings.clear_cookies),
+                onClick = { onClearCookies(currentUrl) },
+            ),
+        ),
+    )
+}
+
+@Composable
+private fun CloudflareHelpBanner(uriHandler: androidx.compose.ui.platform.UriHandler) {
+    Surface(
+        modifier = Modifier.padding(8.dp),
+    ) {
+        WarningBanner(
+            textRes = MR.strings.information_cloudflare_help,
+            modifier = Modifier
+                .clip(MaterialTheme.shapes.small)
+                .clickable {
+                    uriHandler.openUri(CLOUDFLARE_HELP_URL)
+                },
+        )
+    }
+}
+
+@Composable
+private fun LoadingIndicator(
+    loadingState: LoadingState,
+    modifier: Modifier = Modifier,
+) {
+    when (loadingState) {
+        is LoadingState.Initializing -> {
+            LinearProgressIndicator(
+                modifier = modifier.fillMaxWidth(),
+            )
+        }
+        is LoadingState.Loading -> {
+            LinearProgressIndicator(
+                progress = { loadingState.progress },
+                modifier = modifier.fillMaxWidth(),
+            )
+        }
+        else -> { /* No loading indicator */ }
+    }
+}
+
+private fun createWebViewClient(
+    onUrlChange: (String) -> Unit,
+    onPageFinished: (WebView) -> Unit,
+    headers: Map<String, String>,
+    network: NetworkHelper,
+    context: android.content.Context,
+    spoofedPackageName: String,
+) = object : AccompanistWebViewClient() {
+    
+    override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+        super.onPageStarted(view, url, favicon)
+        url?.let(onUrlChange)
+    }
+
+    override fun onPageFinished(view: WebView, url: String?) {
+        super.onPageFinished(view, url)
+        onPageFinished(view)
+    }
+
+    override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+        super.doUpdateVisitedHistory(view, url, isReload)
+        url?.let(onUrlChange)
+    }
+
+    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+        request?.let { req ->
+            val urlString = req.url.toString()
+            
+            return when {
+                urlString.startsWith("blob:http") -> false
+                urlString.startsWith("intent://") -> true
+                else -> {
+                    view?.loadUrl(urlString, headers)
+                    super.shouldOverrideUrlLoading(view, request)
+                }
+            }
+        }
+        return super.shouldOverrideUrlLoading(view, request)
+    }
+
+    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+        return try {
+            request?.let { req ->
+                createInterceptedRequest(req, network, context, spoofedPackageName)
+            } ?: super.shouldInterceptRequest(view, request)
+        } catch (e: Throwable) {
+            super.shouldInterceptRequest(view, request)
+        }
+    }
+}
+
+private fun createInterceptedRequest(
+    request: WebResourceRequest,
+    network: NetworkHelper,
+    context: android.content.Context,
+    spoofedPackageName: String,
+): WebResourceResponse {
+    val internalRequest = Request.Builder().apply {
+        url(request.url.toString())
+        request.requestHeaders.forEach { (key, value) ->
+            if (key == "X-Requested-With" && value in FILTERED_PACKAGE_NAMES(context, spoofedPackageName)) {
+                return@forEach
+            }
+            addHeader(key, value)
+        }
+        method(request.method, null)
+    }.build()
+
+    val response = network.nonCloudflareClient.newCall(internalRequest).execute()
+    val contentType = response.body.contentType()
+    
+    return WebResourceResponse(
+        contentType?.let { "${it.type}/${it.subtype}" } ?: "text/html",
+        contentType?.charset()?.name() ?: "utf-8",
+        response.code,
+        response.message,
+        response.headers.associate { it.first to it.second },
+        response.body.byteStream(),
+    )
+}
+
+private fun configureWebView(webView: WebView, headers: Map<String, String>) {
+    webView.setDefaultSettings()
+
+    // Debug mode (chrome://inspect/#devices)
+    if (BuildConfig.DEBUG && webView.context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+        WebView.setWebContentsDebuggingEnabled(true)
+    }
+
+    headers["user-agent"]?.let { userAgent ->
+        webView.settings.userAgentString = userAgent
+    }
+}
+
+private fun isCloudflareChallenge(html: String): Boolean {
+    return CLOUDFLARE_INDICATORS.any { it in html }
+}
+
+private fun FILTERED_PACKAGE_NAMES(context: android.content.Context, spoofedPackageName: String) = setOf(
+    context.packageName,
+    spoofedPackageName,
+)
+
+private const val CLOUDFLARE_HELP_URL = "https://mihon.app/docs/guides/troubleshooting/#cloudflare"
+
+private val CLOUDFLARE_INDICATORS = listOf(
+    "window._cf_chl_opt",
+    "Ray ID is",
+)
