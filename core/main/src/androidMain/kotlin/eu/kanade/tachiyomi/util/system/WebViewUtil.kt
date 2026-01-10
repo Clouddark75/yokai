@@ -11,25 +11,7 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 object WebViewUtil {
-    private const val CHROME_PACKAGE = "com.android.chrome"
-    private const val SYSTEM_SETTINGS_PACKAGE = "com.android.settings"
-    
     const val MINIMUM_WEBVIEW_VERSION = 114
-
-    fun getInferredUserAgent(context: Context): String {
-        return WebView(context)
-            .getDefaultUserAgentString()
-            .replace("; Android .*?\\)".toRegex(), "; Android 10; K)")
-            .replace("Version/.* Chrome/".toRegex(), "Chrome/")
-    }
-
-    fun getVersion(context: Context): String {
-        val webView = WebView.getCurrentWebViewPackage() ?: return "how did you get here?"
-        val pm = context.packageManager
-        val label = webView.applicationInfo!!.loadLabel(pm)
-        val version = webView.versionName
-        return "$label $version"
-    }
 
     fun supportsWebView(context: Context): Boolean {
         try {
@@ -43,18 +25,8 @@ object WebViewUtil {
 
         return context.packageManager.hasSystemFeature(PackageManager.FEATURE_WEBVIEW)
     }
-
-    fun spoofedPackageName(context: Context): String {
-        return try {
-            context.packageManager.getPackageInfo(CHROME_PACKAGE, PackageManager.GET_META_DATA)
-            CHROME_PACKAGE
-        } catch (_: PackageManager.NameNotFoundException) {
-            SYSTEM_SETTINGS_PACKAGE
-        }
-    }
 }
 
-// Extension functions for WebView
 fun WebView.isOutdated(): Boolean {
     return getWebViewMajorVersion() < WebViewUtil.MINIMUM_WEBVIEW_VERSION
 }
@@ -73,13 +45,6 @@ fun WebView.setDefaultSettings() {
     }
 }
 
-suspend fun WebView.getHtml(): String = suspendCancellableCoroutine { continuation ->
-    evaluateJavascript("document.documentElement.outerHTML") { html -> 
-        continuation.resume(html) 
-    }
-}
-
-// Private extension functions
 private fun WebView.getWebViewMajorVersion(): Int {
     val uaRegexMatch = """.*Chrome/(\d+)\..*""".toRegex().matchEntire(getDefaultUserAgentString())
     return if (uaRegexMatch != null && uaRegexMatch.groupValues.size > 1) {
@@ -101,4 +66,8 @@ private fun WebView.getDefaultUserAgentString(): String {
     settings.userAgentString = originalUA
 
     return defaultUserAgentString
+}
+
+suspend fun WebView.getHtml(): String = suspendCancellableCoroutine {
+    evaluateJavascript("document.documentElement.outerHTML") { html -> it.resume(html) }
 }
