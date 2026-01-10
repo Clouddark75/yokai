@@ -339,7 +339,7 @@ class Downloader(
         if (created == null || !created.exists()) {
             download.status = Download.State.ERROR
             val chapName = download.chapter.preferredChapterName(context, download.manga, preferences)
-            notifier.onError(context.getString(MR.strings.couldnt_download_chapter), chapName)
+            notifier.onError("Could not create manga directory", chapName)
             return
         }
     }
@@ -357,7 +357,7 @@ class Downloader(
     // Verificar que el directorio temporal se creó correctamente
     if (tmpDir == null) {
         download.status = Download.State.ERROR
-        notifier.onError(context.getString(MR.strings.couldnt_download_chapter), chapName)
+        notifier.onError("Could not create chapter directory", chapName)
         return
     }
 
