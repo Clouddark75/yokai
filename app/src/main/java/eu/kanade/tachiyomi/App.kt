@@ -61,6 +61,7 @@ import eu.kanade.tachiyomi.util.system.launchIO
 import eu.kanade.tachiyomi.util.system.localeContext
 import eu.kanade.tachiyomi.util.system.notification
 import eu.kanade.tachiyomi.util.system.setToDefault
+import eu.kanade.tachiyomi.util.system.WebViewUtil
 import java.security.Security
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.launchIn
@@ -237,6 +238,22 @@ open class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.F
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
         MultiDex.install(this)
+    }
+
+    override fun getPackageName(): String {
+        try {
+            // Override the value passed as X-Requested-With in WebView requests
+            val stackTrace = Looper.getMainLooper().thread.stackTrace
+            val isChromiumCall = stackTrace.any { trace ->
+                trace.className.lowercase() in setOf("org.chromium.base.buildinfo", "org.chromium.base.apkinfo") &&
+                    trace.methodName.lowercase() in setOf("getall", "getpackagename", "<init>")
+            }
+
+            if (isChromiumCall) return WebViewUtil.spoofedPackageName(applicationContext)
+        } catch (_: Exception) {
+        }
+
+        return super.getPackageName()
     }
 
     override fun onLowMemory() {
