@@ -250,7 +250,7 @@ class Downloader(
         }
         
         if (isSameMangaDownloading) {
-            delay(50)
+            delay(150)
         }
         
         downloadChapter(download)
