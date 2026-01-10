@@ -333,17 +333,35 @@ class Downloader(
     private suspend fun downloadChapter(download: Download) {
         val mangaDir = provider.getMangaDir(download.manga, download.source)
 
-        val availSpace = DiskUtil.getAvailableStorageSpace(mangaDir)
-        val chapName = download.chapter.preferredChapterName(context, download.manga, preferences)
-        if (availSpace != -1L && availSpace < MIN_DISK_SPACE) {
+    // Verificar que el directorio del manga existe, si no, crearlo
+    if (!mangaDir.exists()) {
+        val created = mangaDir.createDirectory(mangaDir.name)
+        if (created == null || !created.exists()) {
             download.status = Download.State.ERROR
-            notifier.onError(context.getString(MR.strings.couldnt_download_low_space), chapName)
+            val chapName = download.chapter.preferredChapterName(context, download.manga, preferences)
+            notifier.onError(context.getString(MR.strings.couldnt_download_chapter), chapName)
             return
         }
-        val chapterDirname = provider.getChapterDirName(download.chapter, includeId = downloadPreferences.downloadWithId().get())
-        val tmpDir = mangaDir.createDirectory(chapterDirname + TMP_DIR_SUFFIX)!!
+    }
 
-        try {
+    val availSpace = DiskUtil.getAvailableStorageSpace(mangaDir)
+    val chapName = download.chapter.preferredChapterName(context, download.manga, preferences)
+    if (availSpace != -1L && availSpace < MIN_DISK_SPACE) {
+        download.status = Download.State.ERROR
+        notifier.onError(context.getString(MR.strings.couldnt_download_low_space), chapName)
+        return
+    }
+    val chapterDirname = provider.getChapterDirName(download.chapter, includeId = downloadPreferences.downloadWithId().get())
+    val tmpDir = mangaDir.createDirectory(chapterDirname + TMP_DIR_SUFFIX)
+    
+    // Verificar que el directorio temporal se creó correctamente
+    if (tmpDir == null) {
+        download.status = Download.State.ERROR
+        notifier.onError(context.getString(MR.strings.couldnt_download_chapter), chapName)
+        return
+    }
+
+    try {
             // If the page list already exists, start from the file
             val pageList = download.pages ?: run {
                 // Otherwise, pull page list from network and add them to download object
