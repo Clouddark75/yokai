@@ -242,6 +242,17 @@ class Downloader(
     // Adquirir semáforo para limitar a 3 descargas simultáneas
     chapterDownloadSemaphore.acquire()
     try {
+        // Agregar delay para descargas subsecuentes del mismo manga
+        val isSameMangaDownloading = queueState.value.any { 
+            it != download && 
+            it.manga.id == download.manga.id && 
+            it.status == Download.State.DOWNLOADING 
+        }
+        
+        if (isSameMangaDownloading) {
+            delay(50)
+        }
+        
         downloadChapter(download)
 
         // Remove successful download from queue
@@ -333,35 +344,17 @@ class Downloader(
     private suspend fun downloadChapter(download: Download) {
         val mangaDir = provider.getMangaDir(download.manga, download.source)
 
-    // Verificar que el directorio del manga existe, si no, crearlo
-    if (!mangaDir.exists()) {
-        val created = mangaDir.createDirectory(mangaDir.name)
-        if (created == null || !created.exists()) {
+        val availSpace = DiskUtil.getAvailableStorageSpace(mangaDir)
+        val chapName = download.chapter.preferredChapterName(context, download.manga, preferences)
+        if (availSpace != -1L && availSpace < MIN_DISK_SPACE) {
             download.status = Download.State.ERROR
-            val chapName = download.chapter.preferredChapterName(context, download.manga, preferences)
-            notifier.onError("Could not create manga directory", chapName)
+            notifier.onError(context.getString(MR.strings.couldnt_download_low_space), chapName)
             return
         }
-    }
+        val chapterDirname = provider.getChapterDirName(download.chapter, includeId = downloadPreferences.downloadWithId().get())
+        val tmpDir = mangaDir.createDirectory(chapterDirname + TMP_DIR_SUFFIX)!!
 
-    val availSpace = DiskUtil.getAvailableStorageSpace(mangaDir)
-    val chapName = download.chapter.preferredChapterName(context, download.manga, preferences)
-    if (availSpace != -1L && availSpace < MIN_DISK_SPACE) {
-        download.status = Download.State.ERROR
-        notifier.onError(context.getString(MR.strings.couldnt_download_low_space), chapName)
-        return
-    }
-    val chapterDirname = provider.getChapterDirName(download.chapter, includeId = downloadPreferences.downloadWithId().get())
-    val tmpDir = mangaDir.createDirectory(chapterDirname + TMP_DIR_SUFFIX)
-    
-    // Verificar que el directorio temporal se creó correctamente
-    if (tmpDir == null) {
-        download.status = Download.State.ERROR
-        notifier.onError("Could not create chapter directory", chapName)
-        return
-    }
-
-    try {
+        try {
             // If the page list already exists, start from the file
             val pageList = download.pages ?: run {
                 // Otherwise, pull page list from network and add them to download object
