@@ -110,8 +110,6 @@ class SettingsAdvancedController : SettingsLegacyController() {
 
     private val downloadManager: DownloadManager by injectLazy()
 
-    private val trustExtension: TrustExtension by injectLazy()
-
     private val isUpdaterEnabled = BuildConfig.INCLUDE_UPDATER
 
     @SuppressLint("BatteryLife")
