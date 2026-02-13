@@ -139,6 +139,7 @@ class Downloader(
         pending.forEach { if (it.status != Download.State.QUEUE) it.status = Download.State.QUEUE }
 
         isPaused = false
+        notifier.dismissPaused()
 
         launchDownloaderJob()
 
