@@ -24,6 +24,8 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Chapter progress now saved everything the page is changed
 - Adjust sorting order to be more consistent (@Astyyyyy)
 - Improve Local Source when loading from `android/data` (@lalalasupa0)
+- Refresh available extensions list when an extension repo is added or removed
+- Replace filter FAB with Floating Toolbar when browsing source
 
 ### Fixes
 - Allow users to bypass onboarding's permission step if Shizuku is installed
@@ -39,6 +41,7 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Fix crashes caused by RecyclerView stable id (@MuhamadSyabitHidayattulloh)
 - Fix paused download notification is not shown (@MuhamadSyabitHidayattulloh)
 - Disable auto refresh entry from Local Source (@lalalasupa0)
+- Fix extension download stuck on pending state
 
 ### Translation
 - Update translations from Weblate
@@ -80,13 +83,12 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Update dependency androidx.recyclerview:recyclerview to v1.4.0
 - Update dependency androidx.core:core-ktx to v1.17.0
 - Update dependency androidx.core:core-splashscreen to v1.2.0
-- Update dependency androidx.compose:compose-bom to v2025.11.00
+- Update dependency androidx.compose:compose-bom to v2026.01.01
 - Update aboutlibraries to v13.1.0
 - Update plugin kotlinter to v5.1.0
 - Update plugin gradle-versions to v0.52.0
 - Update okhttp monorepo to v5.0.0-alpha.16
 - Update moko to v0.25.1
-- Update kotlin monorepo to v2.2.21
 - Update dependency org.jetbrains.kotlinx:kotlinx-coroutines-bom to v1.10.2
 - Update dependency me.zhanghai.android.libarchive:library to v1.1.5
 - Update dependency io.insert-koin:koin-bom to v4.0.4
@@ -97,10 +99,18 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Update null2264/actions digest to 363cb9c
 - Update dependency io.github.pdvrieze.xmlutil:core-android to v0.91.1
 - Improve X-Requested-With spoof to support newer WebView versions (@Hiirbaf)
-- Update agp to v8.10.1
+- Update agp to v8.12.2
 - Update activity to v1.11.0
 - Update lifecycle to v2.9.4
 - Update sqldelight to v2.2.1
+- Update dependency com.google.android.material:material to v1.14.0-alpha09
+
+## [1.9.7.4]
+
+### Other
+- Prioritize extension classpath over app
+- Update kotlin monorepo to v2.3.10
+- Update dependency gradle to v8.14.4
 
 ## [1.9.7.3]
 
