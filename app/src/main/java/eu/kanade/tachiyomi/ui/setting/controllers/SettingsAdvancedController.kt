@@ -363,6 +363,19 @@ class SettingsAdvancedController : SettingsLegacyController() {
                     }
                 }
             }
+            preference {
+                titleRes = MR.strings.action_revoke_all_extensions
+
+                onClick {
+                    activity?.materialAlertDialog()
+                        ?.setTitle(MR.strings.confirm_revoke_all_extensions)
+                        ?.setPositiveButton(AR.string.ok) { _, _ ->
+                            trustExtension.revokeAll()
+                            activity?.toast(MR.strings.requires_app_restart)
+                        }
+                        ?.setNegativeButton(AR.string.cancel, null)?.show()
+                }
+            }
         }
 
         preferenceCategory {
