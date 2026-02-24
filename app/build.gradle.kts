@@ -275,6 +275,7 @@ tasks {
             "-opt-in=coil3.annotation.ExperimentalCoilApi",
             "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi",
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi",
             "-opt-in=androidx.compose.ui.ExperimentalComposeUiApi",
             "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
             "-opt-in=androidx.compose.animation.ExperimentalAnimationApi",
@@ -288,7 +289,7 @@ tasks {
     }
 
     // Duplicating Hebrew string assets due to some locale code issues on different devices
-    val copyHebrewStrings = task("copyHebrewStrings", type = Copy::class) {
+    val copyHebrewStrings = register("copyHebrewStrings", type = Copy::class) {
         from("./src/main/res/values-he")
         into("./src/main/res/values-iw")
         include("**/*")
