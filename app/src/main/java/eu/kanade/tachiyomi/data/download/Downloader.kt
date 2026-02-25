@@ -122,7 +122,7 @@ class Downloader(
         }
     }
 
-    private val chapterDownloadSemaphore = Semaphore(3)
+    private val chapterDownloadSemaphore = Semaphore(2)
 
     /**
      * Starts the downloader. It doesn't do anything if it's already running or there isn't anything
@@ -139,7 +139,6 @@ class Downloader(
         pending.forEach { if (it.status != Download.State.QUEUE) it.status = Download.State.QUEUE }
 
         isPaused = false
-        notifier.dismissPaused()
 
         launchDownloaderJob()
 
@@ -206,7 +205,7 @@ class Downloader(
                     // Concurrently download from 5 different sources, but limit to 3 chapters total
                     .take(5)
                     .flatMap { (_, downloads) -> downloads }
-                    .take(3) // Límite de 3 capítulos simultáneos
+                    .take(2) // Límite de 3 capítulos simultáneos
                 emit(activeDownloads)
 
                 if (activeDownloads.isEmpty()) break
@@ -760,8 +759,8 @@ class Downloader(
 
     companion object {
         const val TMP_DIR_SUFFIX = "_tmp"
-        const val CHAPTERS_PER_SOURCE_QUEUE_WARNING_THRESHOLD = 15
-        private const val DOWNLOADS_QUEUED_WARNING_THRESHOLD = 30
+        const val CHAPTERS_PER_SOURCE_QUEUE_WARNING_THRESHOLD = 1000
+        private const val DOWNLOADS_QUEUED_WARNING_THRESHOLD = 1000
 
         // Arbitrary minimum required space to start a download: 200 MB
         const val MIN_DISK_SPACE = 200 * 1024 * 1024
