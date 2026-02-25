@@ -17,6 +17,7 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Add the ability to mark duplicate read chapters as read (@AntsyLich)
 - Add option to zoom into full covers (@Hiirbaf)
 - Add APNG support for Android 9+ (@lalalasupa0)
+- Add markdown support to entry description (@luigidotmoe)
 
 ### Changes
 - Temporarily disable log file
@@ -27,6 +28,7 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Refresh available extensions list when an extension repo is added or removed
 - Replace filter FAB with Floating Toolbar when browsing source
 - Show FAB button to read/resume chapter when start/continue reading button is off-screen
+- LocalSource entries no longer auto-refresh when opened (@lalalasupa0)
 
 ### Fixes
 - Allow users to bypass onboarding's permission step if Shizuku is installed
