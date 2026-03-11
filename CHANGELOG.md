@@ -18,6 +18,7 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Add option to zoom into full covers (@Hiirbaf)
 - Add APNG support for Android 9+ (@lalalasupa0)
 - Add markdown support to entry description (@luigidotmoe)
+  - Fix text disappeared when it's surrounded by `<>` (@lalalasupa0)
 
 ### Changes
 - Temporarily disable log file
@@ -29,6 +30,7 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Replace filter FAB with Floating Toolbar when browsing source
 - Show FAB button to read/resume chapter when start/continue reading button is off-screen
 - LocalSource entries no longer auto-refresh when opened (@lalalasupa0)
+- Long tap chapters on Reader now mark it as read (@lalalasupa0)
 
 ### Fixes
 - Allow users to bypass onboarding's permission step if Shizuku is installed
@@ -45,6 +47,8 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Fix paused download notification is not shown (@MuhamadSyabitHidayattulloh)
 - Disable auto refresh entry from Local Source (@lalalasupa0)
 - Fix extension download stuck on pending state
+- Only solve Cloudflare with WebView if it's not geoblock (@AwkwardPeak7)
+- Fix cover from LocalSource sometimes didn't load (@lalalasupa0)
 
 ### Translation
 - Update translations from Weblate
@@ -108,6 +112,7 @@ The format is simplified version of [Keep a Changelog](https://keepachangelog.co
 - Update sqldelight to v2.2.1
 - Update dependency com.google.android.material:material to v1.14.0-alpha09
 - Update dependency androidx.compose.material3:material3 to v1.5.0-alpha14
+- Minimize memory usage by reducing in-memory cover cache size (@Lolle2000la)
 
 ## [1.9.7.4]
 
