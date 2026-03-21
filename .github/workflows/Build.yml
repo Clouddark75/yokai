@@ -42,11 +42,14 @@ jobs:
         run: |
           ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager "build-tools;35.0.0"
 
-      - name: Setup Gradle
-        uses: Clouddark75/actions/gradle-java-setup@363cb9cf3d66bd9c72ed6860142c6b2c121d7e94
+      - name: Setup Java
+        uses: actions/setup-java@v5
         with:
-          java: 17
-          distro: temurin
+          java-version: '17'
+          distribution: temurin
+ 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Setup CHANGELOG parser
         uses: taiki-e/install-action@parse-changelog
