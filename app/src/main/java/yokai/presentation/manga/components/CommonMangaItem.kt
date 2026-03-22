@@ -12,8 +12,15 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -39,8 +46,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImagePainter
+import dev.icerock.moko.resources.compose.stringResource
 import dev.icerock.moko.resources.desc.Utils
-import yokai.presentation.library.components.LazyLibraryGrid
+import yokai.i18n.MR
+import yokai.presentation.library.components.LazyLibraryStaggeredGrid
 import yokai.domain.manga.models.MangaCover as MangaCoverModel
 
 // TODO:
@@ -153,7 +162,12 @@ fun MangaComfortableGridItem(
                 extraBadgeSegments = badgeSegments,
             ),
             content = {
-                // FIXME: Play Button a.k.a Continue Reading
+                if (onClickContinueReading != null) {
+                    ContinueReadingButton(
+                        modifier = Modifier.align(Alignment.BottomEnd),
+                        onClick = onClickContinueReading,
+                    )
+                }
             },
         )
         GridItemTitle(
@@ -205,11 +219,42 @@ fun MangaCompactGridItem(
             extraBadgeSegments = badgeSegments,
         ),
         content = {
+            if (onClickContinueReading != null) {
+                ContinueReadingButton(
+                    modifier = Modifier.align(Alignment.TopEnd),
+                    onClick = onClickContinueReading,
+                )
+            }
             CoverTextOverlay(
                 title = title,
             )
         },
     )
+}
+
+@Composable
+fun ContinueReadingButton(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    IconButton(
+        modifier = modifier
+            .size(36.dp)
+            .padding(6.dp)
+            .border(BorderStroke(0.1.dp, Color(0xFFEDEDED)), CircleShape),
+        onClick = onClick,
+        shape = CircleShape,
+        colors = IconButtonDefaults.iconButtonColors().copy(
+            containerColor = Color(0xAD212121),
+        ),
+    ) {
+        Icon(
+            modifier = Modifier.padding(4.dp),
+            imageVector = Icons.AutoMirrored.Default.MenuBook,
+            contentDescription = stringResource(MR.strings.start_reading),
+            tint = Color.White,
+        )
+    }
 }
 
 @Composable
@@ -295,7 +340,7 @@ fun MangaGridCover(
 private fun MangaGridCoverPreview() {
     MaterialTheme {
         Scaffold { contentPadding ->
-            LazyLibraryGrid(
+            LazyLibraryStaggeredGrid(
                 columns = 3,
                 contentPadding = contentPadding,
             ) {
@@ -317,6 +362,7 @@ private fun MangaGridCoverPreview() {
                                 textColor = MaterialTheme.colorScheme.onSecondary,
                             ),
                         ),
+                        onClickContinueReading = {},
                     )
                 }
             }
