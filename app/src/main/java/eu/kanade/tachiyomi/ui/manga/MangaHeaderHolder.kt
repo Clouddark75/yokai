@@ -48,6 +48,7 @@ import eu.kanade.tachiyomi.util.system.isLTR
 import eu.kanade.tachiyomi.util.view.resetStrokeColor
 import io.noties.markwon.Markwon
 import io.noties.markwon.SoftBreakAddsNewLinePlugin
+import android.text.method.LinkMovementMethod
 import yokai.i18n.MR
 import yokai.util.coil.loadManga
 import yokai.util.lang.getString
@@ -272,7 +273,8 @@ class MangaHeaderHolder(
 
     private fun setDescription() {
         if (binding != null) {
-            val desc = adapter.controller.mangaPresenter().manga.description?.replace("<", "\\<")
+            val desc = adapter.controller.mangaPresenter().manga.description?.replace("<", "&lt;")?.replace(">", "&gt;")?.replace(Regex("""(?m)^\s*-\s*$"""), "\\-")?.replace(Regex("""(?m)^\s*\*\s*$"""), "\\*")
+            binding.mangaSummary.movementMethod = LinkMovementMethod.getInstance()
             binding.mangaSummary.text = when {
                 desc.isNullOrBlank() -> itemView.context.getString(MR.strings.no_description)
                 else -> markwon.toMarkdown(desc.trim())
