@@ -108,12 +108,16 @@ class MangaCoverFetcher(
 
     private suspend fun httpLoader(): FetchResult {
         val coverFile = coverFileLazy.value
-        if (coverFile?.exists() == true && options.diskCachePolicy.readEnabled) {
+        if (coverFile?.exists() == true && coverFile.length() > 0L && options.diskCachePolicy.readEnabled) {
             if (!isInLibrary) {
                 coverFile.setLastModified(Date().time)
             }
             setRatioAndColorsInScope(mangaId, url, isInLibrary, UniFile.fromFile(coverFile))
             return fileLoader(coverFile)
+        } else if (coverFile?.exists() == true && coverFile.length() == 0L) {
+            // Leftover empty/corrupt file from a previous interrupted write; remove it so
+            // we fall through to disk-cache/network instead of serving a broken image forever.
+            coverFile.delete()
         }
 
         var snapshot = readFromDiskCache()
@@ -246,13 +250,31 @@ class MangaCoverFetcher(
 
     private fun writeSourceToCoverCache(input: Source, cacheFile: File) {
         cacheFile.parentFile?.mkdirs()
-        cacheFile.delete()
+        // Write to a temp file first and rename it into place atomically. If the write is
+        // interrupted (app killed, network cut mid-transfer, etc.) the previous cover file
+        // (if any) is left untouched instead of ending up truncated/corrupted, and we never
+        // leave a partially-written file at the final path for Coil to serve.
+        val tmpFile = File(cacheFile.parentFile, "${cacheFile.name}.tmp")
         try {
-            cacheFile.sink().buffer().use { output ->
+            tmpFile.sink().buffer().use { output ->
                 output.writeAll(input)
             }
-        } catch (e: Exception) {
+            if (tmpFile.length() == 0L) {
+                // Guard against zero-byte writes (e.g. empty/failed response body) silently
+                // replacing a previously good cover.
+                tmpFile.delete()
+                throw IOException("Downloaded cover was empty")
+            }
             cacheFile.delete()
+            if (!tmpFile.renameTo(cacheFile)) {
+                // Fallback copy in case rename fails across filesystems/providers
+                tmpFile.source().buffer().use { tmpInput ->
+                    cacheFile.sink().buffer().use { out -> out.writeAll(tmpInput) }
+                }
+                tmpFile.delete()
+            }
+        } catch (e: Exception) {
+            tmpFile.delete()
             throw e
         }
     }
