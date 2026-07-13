@@ -245,7 +245,15 @@ fun Manga.prepareCoverUpdate(coverCache: CoverCache, remoteManga: SManga, refres
     // Never refresh covers if the url is empty to avoid "losing" existing covers
     if (newUrl.isEmpty()) return
 
-    if (!refreshSameUrl && thumbnail_url == newUrl) return
+    // If we previously had no url, or no cached file for the current url (e.g. it was
+    // added when the source hadn't published a cover yet, or the cached file is missing/
+    // was never written), we must still proceed even if the "url" technically matches.
+    // Otherwise cover_last_modified (part of the Coil cache key) never changes and the
+    // cache file is never (re)written, leaving the entry permanently stuck without a cover.
+    val hasUsableCachedCover = !thumbnail_url.isNullOrEmpty() &&
+        coverCache.getCoverFile(thumbnail_url, !favorite)?.exists() == true
+
+    if (!refreshSameUrl && hasUsableCachedCover && thumbnail_url == newUrl) return
 
     when {
         isLocal() -> {
