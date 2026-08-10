@@ -50,7 +50,7 @@ val supportedAbis = setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
 android {
     defaultConfig {
         applicationId = "eu.kanade.tachiyomi"
-        versionCode = 158
+        versionCode = 159
         versionName = _versionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true

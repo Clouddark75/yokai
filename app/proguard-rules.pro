@@ -19,6 +19,7 @@
 -keep,allowoptimization class uy.kohesive.injekt.** { public protected *; }
 -keep,allowoptimization class org.koin.** { public protected *; }
 -keep,allowoptimization class eu.davidea.flexibleadapter.** { public protected *; }
+-keep,allowoptimization class com.squareup.zstd.** { public protected *; }
 -keep class io.requery.android.database.** { public protected *; }
 
 # From extensions-lib
@@ -38,6 +39,11 @@
 -keep class com.google.android.material.** { *; }
 -keep interface com.google.android.material.** { *; }
 -keep public class com.google.android.material.R$* { *; }
+
+-keepclassmembers class * implements java.io.Serializable {
+    java.lang.Object writeReplace();
+    java.lang.Object readResolve();
+}
 
 ##---------------Begin: proguard configuration for RxJava 1.x  ----------
 -dontwarn sun.misc.**
