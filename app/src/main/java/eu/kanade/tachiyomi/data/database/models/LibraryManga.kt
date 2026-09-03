@@ -15,7 +15,7 @@ data class LibraryManga(
     var lastFetch: Long = 0,
 ) {
     val hasRead
-        get() = read > 0
+    get() = read > 0
 
     companion object {
         // Used by findAll (one-shot fetch) — includes description
@@ -93,7 +93,6 @@ data class LibraryManga(
             url: String,
             artist: String?,
             author: String?,
-            description = null,
             genre: String?,
             title: String,
             status: Long,
