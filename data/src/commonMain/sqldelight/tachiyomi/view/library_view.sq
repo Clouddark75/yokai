@@ -62,6 +62,7 @@ SELECT
     library_view.filtered_scanlators,
     library_view.update_strategy,
     library_view.cover_last_modified,
+    library_view.memo,
     library_view.total,
     library_view.has_read,
     library_view.bookmark_count,
