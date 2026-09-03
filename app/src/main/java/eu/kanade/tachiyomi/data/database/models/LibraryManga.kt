@@ -93,6 +93,7 @@ data class LibraryManga(
             url: String,
             artist: String?,
             author: String?,
+            description = null,
             genre: String?,
             title: String,
             status: Long,
