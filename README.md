@@ -27,13 +27,13 @@ A free and open source manga reader
 [![Yokai Stable](https://img.shields.io/github/v/release/null2264/yokai?maxAge=3600&label=Stable&labelColor=06599d&color=043b69&filter=v*)](https://github.com/null2264/yokai/releases)
 [![Yokai Nightly](https://img.shields.io/github/v/release/null2264/yokai-nightly?maxAge=3600&label=Nightly&labelColor=2c2c47&color=1c1c39&filter=r*)](https://github.com/null2264/yokai-nightly/releases)
 
-*Requires Android 6.0 or higher.*
+*Requires Android 8.0 or higher.*
 
 ## About Fork
 
 This fork was created for personal usage, the name Yōkai is chosen in theme of my "paranormal" fork collection, all of them are made for personal purposes, to explore the language used to made them, explore new tech, or simply want to add my own twists that may not accepted by upstream as a PR.
 
-Updates are sporadic, sometime fast, sometime slow.
+~~Updates are sporadic, sometime fast, sometime slow.~~ I just did my thesis result seminar + final defense, but I still have revisions to do before I can fully go back to maintain Yōkai. I hope you can understand. As I said on the note in v1.10.0 release, I'll still look through PRs every now and then, so feel free to make a PR if you really need something.
 
 As of the time of writing, this fork is currently focusing on migrating to a much more modern infrastructure, some features may be added, but most changes are happening behind the scene.
 

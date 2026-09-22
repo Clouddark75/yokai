@@ -1,7 +1,6 @@
 [versions]
 aboutlibraries = "13.1.0"
 chucker = "3.5.2"
-flexible-adapter = "c8013533"
 fast_adapter = "5.7.0"
 moko = "0.25.1"
 okhttp = "5.4.0"
@@ -40,8 +39,8 @@ firebase = { module = "com.google.firebase:firebase-bom", version = "33.14.0" }
 firebase-analytics = { module = "com.google.firebase:firebase-analytics-ktx" }
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics-ktx" }
 flexbox = { module = "com.google.android.flexbox:flexbox", version = "3.0.0" }
-flexible-adapter-ui = { module = "com.github.arkon.FlexibleAdapter:flexible-adapter-ui", version.ref = "flexible-adapter" }
-flexible-adapter = { module = "com.github.arkon.FlexibleAdapter:flexible-adapter", version.ref = "flexible-adapter" }
+flexible-adapter-ui = { module = "eu.davidea:flexible-adapter-ui", version = "1.0.0" }
+flexible-adapter = { module = "eu.davidea:flexible-adapter", version = "5.1.0" }
 image-decoder = { module = "com.github.tachiyomiorg:image-decoder", version = "41c059e540" }
 
 kermit = { module = "co.touchlab:kermit", version.ref = "kermit" }
@@ -70,7 +69,7 @@ mockk = { module = "io.mockk:mockk", version = "1.14.2" }
 moko-resources = { module = "dev.icerock.moko:resources", version.ref = "moko" }
 moko-resources-compose = { module = "dev.icerock.moko:resources-compose", version.ref = "moko" }
 
-okio = { module = "com.squareup.okio:okio", version = "3.18.1" }
+okio = { module = "com.squareup.okio:okio", version = "3.18.2" }
 okhttp-brotli = { module = "com.squareup.okhttp3:okhttp-brotli", version.ref = "okhttp" }
 okhttp-dnsoverhttps = { module = "com.squareup.okhttp3:okhttp-dnsoverhttps", version.ref = "okhttp" }
 okhttp-logging-interceptor = { module = "com.squareup.okhttp3:logging-interceptor", version.ref = "okhttp" }
